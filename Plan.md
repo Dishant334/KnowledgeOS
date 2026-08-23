@@ -51,32 +51,36 @@ A backend-first build order: get the RAG engine correct and *measured* before to
 
 ## Phase 1 — FastAPI Backend Foundation (3–4 days)
 
-**Goal:** Backend-only skeleton with the real route surface, no business logic yet.
+**Goal:** Backend-only skeleton with the real route surface, Clerk authentication, PostgreSQL persistence, and no RAG business logic yet.
 
-```
+```text
 FastAPI
 ├── /health
 ├── /auth
+│   └── /me
 ├── /documents
 ├── /retrieve
 └── /ask
-
 ```
 
-- FastAPI app with Pydantic models for every request/response — get typed contracts right early.
-- JWT auth scaffolding: register, login, refresh, `/me`, dependency-injected `get_current_user`.
-- `/documents` (upload stub), `/retrieve` (stub), `/ask` (stub) — wired but not yet intelligent.
-- File upload handling (multipart, size/type validation).
-- Async endpoints throughout; centralized exception handlers from the start (don't bolt this on in Phase 7).
-- Postgres connection + Alembic migrations initialized (`users`, `documents`, `conversations`, `messages`).
+* FastAPI app with Pydantic models for every request/response — establish typed API contracts early.
+* **Clerk authentication:** Clerk handles registration, login, sessions, and token issuance; FastAPI verifies Clerk JWTs and uses a dependency-injected `get_current_user` to identify the authenticated user.
+* `/auth/me` — protected endpoint that resolves the authenticated Clerk user to the application's PostgreSQL user record.
+* `/documents` (upload/list/delete stubs), `/retrieve` (stub), `/ask` (stub) — wired but not yet intelligent.
+* File upload handling with multipart support, file-size limits, and file-type validation.
+* Async endpoints where appropriate; centralized exception handlers from the start.
+* PostgreSQL connection + Alembic migrations initialized for `users`, `documents`, `conversations`, and `messages`.
+* `users` stores the application's user record and **Clerk user ID**, not passwords or authentication credentials.
+* Protected document endpoints enforce user-level data isolation — users can only access their own documents.
 
-**Skills exercised:** FastAPI, Pydantic, JWT, dependency injection, file uploads, async patterns, error handling.
+**Skills exercised:** FastAPI, Pydantic, Clerk authentication, JWT verification, dependency injection, PostgreSQL, Alembic, file uploads, async patterns, authorization, and error handling.
 
-**Deliverable:** Swagger docs showing every route, JWT login/refresh working end-to-end against Postgres.
+**Deliverable:** Swagger docs showing every route, Clerk-authenticated requests successfully verified by FastAPI, authenticated users mapped to PostgreSQL, protected document endpoints working with validation, and `/retrieve` and `/ask` wired as typed stubs.
 
-**Resume line:** *"Built a typed, async FastAPI backend with JWT authentication, dependency-injected auth context, and centralized error handling as the foundation for a production RAG service."*
+**Resume line:** *"Built a typed, async FastAPI backend integrated with Clerk authentication, JWT verification, dependency-injected user context, PostgreSQL persistence, and centralized error handling as the foundation for a production RAG service."*
 
 ---
+
 
 ## Phase 2 — Document Ingestion (1–2 weeks)
 
