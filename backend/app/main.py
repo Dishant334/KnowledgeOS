@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from sqlalchemy import text
+from app.routers.auth import router as auth_router
 
 
 app=FastAPI(title="KnowledgeOS")
@@ -24,3 +25,5 @@ def test_db():
             "status": "failed",
             "error": str(e),
         }
+
+app.include_router(auth_router)
