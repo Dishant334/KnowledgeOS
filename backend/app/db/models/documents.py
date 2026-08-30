@@ -5,7 +5,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
 
-
 class Document(Base):
     __tablename__ = "documents"
 
@@ -35,10 +34,26 @@ class Document(Base):
         nullable=False,
     )
 
+    storage_key: Mapped[str] = mapped_column(
+    String(64),           # matches document_hash length, not a filesystem path anymore
+    nullable=False,
+)
+
+    document_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        index=True,
+    )
+
     status: Mapped[str] = mapped_column(
         String(50),
         default="pending",
         nullable=False,
+    )
+
+    error_message: Mapped[str | None] = mapped_column(
+        String(1000),
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -57,4 +72,4 @@ class Document(Base):
     user = relationship(
         "User",
         back_populates="documents",
-    )
+    )  
