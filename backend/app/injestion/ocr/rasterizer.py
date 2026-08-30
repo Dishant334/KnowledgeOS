@@ -1,0 +1,1 @@
+# missing — converts scanned PDF page → image before OCR
