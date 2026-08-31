@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.models.documents import Document
 from app.db.models.user import User
 from app.core.postgres_storage import PostgresStorage
-from app.injestion.hashing import compute_document_hash
+from app.ingestion.hashing import compute_document_hash
 from app.db.models.documents_blob import DocumentBlob
 
 
