@@ -5,6 +5,7 @@ from typing import Any
 from langchain_community.document_loaders import PyMuPDFLoader
 
 from app.ingestion.loaders.base import BaseLoader
+from langchain_core.documents import Document
 
 
 class PDFLoader(BaseLoader):
@@ -14,7 +15,7 @@ class PDFLoader(BaseLoader):
         data: bytes,
         filename: str,
         metadata: dict[str, Any] | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[Document]:
 
         if not data:
             raise ValueError("PDF data is empty")
@@ -32,21 +33,27 @@ class PDFLoader(BaseLoader):
                 temp_path = Path(temp_file.name)
 
             loader = PyMuPDFLoader(str(temp_path))
-
+           
             documents = loader.load()
+
+            total_pages=len(documents)
+            
 
             result = []
 
-            for document in documents:
+            for page_number,document in enumerate(documents, start=1):
 
                 result.append(
                     {
                         "content": document.page_content,
                         "metadata": {
                             **metadata,
+                            **document.metadata,
                             "filename": filename,
                             "file_type": "pdf",
-                            **document.metadata,
+                              "page_number": page_number,
+                            "total_pages": total_pages,
+                            
                         },
                     }
                 )

@@ -5,6 +5,7 @@ from tempfile import NamedTemporaryFile
 from typing import Any
 
 from langchain_community.document_loaders import CSVLoader
+from langchain_core.documents import Document
 
 from app.ingestion.loaders.base import BaseLoader
 
@@ -16,7 +17,7 @@ class CSVFileLoader(BaseLoader):
         data: bytes,
         filename: str,
         metadata: dict[str, Any] | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[Document]:
 
         if not data:
             raise ValueError("CSV data is empty")

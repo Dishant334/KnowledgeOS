@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
+from langchain_core.documents import Document
 
 
 class BaseLoader(ABC):
@@ -22,7 +23,7 @@ class BaseLoader(ABC):
     async def load(
         self,
         data:bytes,
-    ) -> list[dict[str, Any]]:
+    ) -> list[Document]:
         """
         Load and extract content from a file.
 

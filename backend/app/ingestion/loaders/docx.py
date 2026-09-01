@@ -7,6 +7,7 @@ from typing import Any
 from langchain_community.document_loaders import Docx2txtLoader
 
 from app.ingestion.loaders.base import BaseLoader
+from langchain_core.documents import Document
 
 
 class DOCXLoader(BaseLoader):
@@ -16,7 +17,7 @@ class DOCXLoader(BaseLoader):
         data: bytes,
         filename: str,
         metadata: dict[str, Any] | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[Document]:
 
         if not data:
             raise ValueError("DOCX data is empty")

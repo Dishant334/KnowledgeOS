@@ -7,6 +7,7 @@ from typing import Any
 from langchain_community.document_loaders import UnstructuredExcelLoader
 
 from app.ingestion.loaders.base import BaseLoader
+from langchain_core.documents import Document
 
 
 class XLSXLoader(BaseLoader):
@@ -16,7 +17,7 @@ class XLSXLoader(BaseLoader):
         data: bytes,
         filename: str,
         metadata: dict[str, Any] | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[Document]:
 
         if not data:
             raise ValueError("XLSX data is empty")
