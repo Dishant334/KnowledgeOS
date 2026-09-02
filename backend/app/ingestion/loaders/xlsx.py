@@ -1,13 +1,12 @@
 # app/ingestion/loaders/xlsx.py
 
-from pathlib import Path
-from tempfile import NamedTemporaryFile
+from io import BytesIO
 from typing import Any
 
-from langchain_community.document_loaders import UnstructuredExcelLoader
+import pandas as pd
+from langchain_core.documents import Document
 
 from app.ingestion.loaders.base import BaseLoader
-from langchain_core.documents import Document
 
 
 class XLSXLoader(BaseLoader):
@@ -24,40 +23,43 @@ class XLSXLoader(BaseLoader):
 
         metadata = metadata or {}
 
-        temp_path: Path | None = None
-
         try:
-            with NamedTemporaryFile(
-                suffix=".xlsx",
-                delete=False,
-            ) as temp_file:
-                temp_file.write(data)
-                temp_path = Path(temp_file.name)
-
-            loader = UnstructuredExcelLoader(
-                str(temp_path),
-                mode="elements",
+            sheets = pd.read_excel(
+                BytesIO(data),
+                sheet_name=None,   # None -> dict of {sheet_name: DataFrame}, all sheets
+                dtype=str,
+                engine="openpyxl",
             )
+        except Exception as exc:
+            raise ValueError("Failed to read XLSX data") from exc
 
-            documents = loader.load()
+        result: list[Document] = []
 
-            result = []
+        for sheet_name, df in sheets.items():
+            df = df.fillna("")
 
-            for document in documents:
-                result.append(
-                    {
-                        "content": document.page_content,
-                        "metadata": {
-                            **metadata,
-                            "filename": filename,
-                            "file_type": "xlsx",
-                            **document.metadata,
-                        },
-                    }
+            for row_index, row in df.iterrows():
+                row_text = "\n".join(
+                    f"{col}: {value}"
+                    for col, value in row.items()
+                    if str(value).strip()
                 )
 
-            return result
+                if not row_text.strip():
+                    continue
 
-        finally:
-            if temp_path and temp_path.exists():
-                temp_path.unlink()
+                result.append(
+                    Document(
+                        page_content=row_text,
+                        metadata={
+                            **metadata,
+                            "filename": filename,
+                            "source": filename,
+                            "file_type": "xlsx",
+                            "sheet_name": sheet_name,
+                            "row_index": int(row_index),
+                        },
+                    )
+                )
+
+        return result

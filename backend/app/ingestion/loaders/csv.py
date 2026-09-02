@@ -42,17 +42,19 @@ class CSVFileLoader(BaseLoader):
 
             result = []
 
-            for document in documents:
+            for row_index,document in  enumerate(documents):
                 result.append(
+                    Document(
                     {
                         "content": document.page_content,
                         "metadata": {
                             **metadata,
                             "filename": filename,
                             "file_type": "csv",
+                            "row_index": document.metadata.get("row", row_index),
                             **document.metadata,
                         },
-                    }
+                    })
                 )
 
             return result

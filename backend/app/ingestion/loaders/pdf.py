@@ -44,18 +44,19 @@ class PDFLoader(BaseLoader):
             for page_number,document in enumerate(documents, start=1):
 
                 result.append(
-                    {
+                    Document({
                         "content": document.page_content,
                         "metadata": {
                             **metadata,
                             **document.metadata,
                             "filename": filename,
+                            "source": filename,
                             "file_type": "pdf",
                               "page_number": page_number,
                             "total_pages": total_pages,
                             
                         },
-                    }
+                    })
                 )
 
             return result

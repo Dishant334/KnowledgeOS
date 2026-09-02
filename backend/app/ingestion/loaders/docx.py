@@ -44,15 +44,17 @@ class DOCXLoader(BaseLoader):
 
             for document in documents:
                 result.append(
+                    Document(
                     {
                         "content": document.page_content,
                         "metadata": {
                             **metadata,
                             "filename": filename,
                             "file_type": "docx",
+                            "source": filename,
                             **document.metadata,
                         },
-                    }
+                    })
                 )
 
             return result

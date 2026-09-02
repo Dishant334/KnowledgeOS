@@ -5,9 +5,9 @@ from tempfile import NamedTemporaryFile
 from typing import Any
 
 from langchain_community.document_loaders import BSHTMLLoader
+from langchain_core.documents import Document
 
 from app.ingestion.loaders.base import BaseLoader
-from langchain_core.documents import Document
 
 
 class HTMLLoader(BaseLoader):
@@ -23,36 +23,36 @@ class HTMLLoader(BaseLoader):
             raise ValueError("HTML data is empty")
 
         metadata = metadata or {}
-
         temp_path: Path | None = None
 
+        # Preserved BEFORE parsing, since BSHTMLLoader (BeautifulSoup)
+        # extracts plain text and discards the original markup.
+        # HTMLSpecificStrategy (chunking) needs this raw markup to
+        # split on actual heading tags.
+        raw_html = data.decode("utf-8", errors="replace")
+
         try:
-            with NamedTemporaryFile(
-                suffix=".html",
-                delete=False,
-            ) as temp_file:
+            with NamedTemporaryFile(suffix=".html", delete=False) as temp_file:
                 temp_file.write(data)
                 temp_path = Path(temp_file.name)
 
-            loader = BSHTMLLoader(
-                str(temp_path),
-            )
-
+            loader = BSHTMLLoader(str(temp_path))
             documents = loader.load()
 
-            result = []
-
+            result: list[Document] = []
             for document in documents:
                 result.append(
-                    {
-                        "content": document.page_content,
-                        "metadata": {
+                    Document(
+                        page_content=document.page_content,
+                        metadata={
                             **metadata,
-                            "filename": filename,
-                            "file_type": "html",
                             **document.metadata,
+                            "filename": filename,
+                            "source": filename,
+                            "file_type": "html",
+                            "raw_html": raw_html,
                         },
-                    }
+                    )
                 )
 
             return result
