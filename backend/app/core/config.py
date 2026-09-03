@@ -7,6 +7,7 @@ class Settings(BaseSettings):
      clerk_jwks_url: str          # https://<your-domain>.clerk.accounts.dev/.well-known/jwks.json
      clerk_issuer: str            # https://<your-domain>.clerk.accounts.dev
      clerk_webhook_secret: str    # for verifying Clerk → backend webhooks
+     qdrant_url: str
 
      model_config = SettingsConfigDict(
         env_file=".env",

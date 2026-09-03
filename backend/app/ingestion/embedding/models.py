@@ -1,11 +1,12 @@
 # app/ingestion/embedding/models.py
 
 from dataclasses import dataclass
+from app.core.config import settings
 
 
 @dataclass
 class EmbeddingConfig:
-    qdrant_url: str = "http://localhost:6333"
+    qdrant_url: str = settings.qdrant_url
     qdrant_api_key: str | None = None
     collection_name: str = "documents"
 
