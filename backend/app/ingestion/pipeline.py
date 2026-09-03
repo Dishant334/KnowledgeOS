@@ -23,8 +23,7 @@ cleaning_orchestrator = CleaningOrchestrator()
 chunking_orchestrator = ChunkingOrchestrator()
 embedding_orchestrator = EmbeddingOrchestrator()
 
-
-async def ingest_file(
+def ingest_file(
     data: bytes,
     filename: str,
     mime_type: str,
@@ -40,7 +39,7 @@ async def ingest_file(
     try:
         # step 1: load the file using the right loader
         loader = get_loader(mime_type)
-        documents = await loader.load(data, filename, metadata)
+        documents =  loader.load(data, filename, metadata)
 
         if not documents:
             return IngestionResult(
