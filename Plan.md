@@ -253,7 +253,7 @@ At this point you have a **fully working RAG backend** — before Docker, before
 - `docker compose up` brings up the full backend stack cleanly from a fresh clone.
 - Health checks per service in the compose file.
 - `docker-compose.prod.yml` variant for later deployment (leaner image, no dev volumes/reload).
-
+- 'Test ingestion pipeling and embedding stuff'
 **Deliverable:** Fresh clone → `docker compose up` → full backend healthy and answering `/ask` within minutes, no manual setup steps.
 
 **Resume line:** *"Containerized the full backend stack (FastAPI, Postgres, Redis, Qdrant) with multi-stage Docker builds and compose-based orchestration for reproducible local and production environments."*
