@@ -3,6 +3,7 @@
 import logging
 
 from app.ingestion.embedding.orchestrator import EmbeddingOrchestrator
+from app.generation.memory import get_formatted_history
 from app.retrieval.model import RetrievalConfig, RetrievalResult
 from app.retrieval.query_rewriter import build_query_rewriter
 from app.retrieval.multi_query import build_multi_query_chain, generate_query_variants
@@ -14,8 +15,6 @@ from app.retrieval.filters import build_qdrant_filter
 
 logger = logging.getLogger(__name__)
 
-# built once, reused across every call (loads the embedding model +
-# reranker model once instead of on every request)
 embedding_orchestrator = EmbeddingOrchestrator()
 parent_expander = ParentExpander()
 
@@ -23,14 +22,23 @@ parent_expander = ParentExpander()
 def retrieve(
     question: str,
     llm,
+    session_id: str | None = None,
     config: RetrievalConfig = None,
-    history: str = "",
     doc_type: str | None = None,
     uploaded_by: str | None = None,
 ) -> RetrievalResult:
-  
+    """
+    runs the full retrieval chain for one question.
+    session_id, if given, pulls recent conversation history from
+    Postgres (the SAME history generation.memory manages) so follow-up
+    questions like "what about the 2023 version?" get rewritten with
+    real context, not answered blind.
+    """
 
     config = config or RetrievalConfig()
+
+    # step 0: pull conversation history (if this is part of a conversation)
+    history = get_formatted_history(session_id) if session_id else ""
 
     # step 1: rewrite query
     rewriter = build_query_rewriter(llm)
