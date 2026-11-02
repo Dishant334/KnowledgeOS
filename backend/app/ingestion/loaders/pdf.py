@@ -10,7 +10,7 @@ from langchain_core.documents import Document
 
 class PDFLoader(BaseLoader):
 
-    async def load(
+    def load(
         self,
         data: bytes,
         filename: str,
@@ -44,9 +44,9 @@ class PDFLoader(BaseLoader):
             for page_number,document in enumerate(documents, start=1):
 
                 result.append(
-                    Document({
-                        "content": document.page_content,
-                        "metadata": {
+                    Document(
+                        page_content=document.page_content,
+                        metadata={
                             **metadata,
                             **document.metadata,
                             "filename": filename,
@@ -56,7 +56,7 @@ class PDFLoader(BaseLoader):
                             "total_pages": total_pages,
                             
                         },
-                    })
+                    )
                 )
 
             return result

@@ -7,6 +7,19 @@ from app.ingestion.loaders.csv import CSVFileLoader
 from app.ingestion.loaders.html import HTMLLoader
 from app.ingestion.loaders.xlsx import XLSXLoader
 from app.ingestion.loaders.pptx import PPTXLoader
+from app.ingestion.loaders.text import TextLoader
+
+
+SUPPORTED_MIME_TYPES = frozenset({
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/csv",
+    "text/html",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+    "text/markdown",
+})
 
 
 def get_loader(mime_type: str) -> BaseLoader:
@@ -28,6 +41,12 @@ def get_loader(mime_type: str) -> BaseLoader:
 
     elif mime_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
         return PPTXLoader()
+
+    elif mime_type == "text/plain":
+        return TextLoader(file_type="txt")
+
+    elif mime_type == "text/markdown":
+        return TextLoader(file_type="md")
 
     else:
         raise ValueError(

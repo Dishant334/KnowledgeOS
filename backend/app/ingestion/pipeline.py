@@ -1,8 +1,11 @@
 # app/ingestion/pipeline.py
 
 import logging
+from functools import lru_cache
 
+import httpx
 from langchain_core.documents import Document
+from qdrant_client.http.exceptions import ResponseHandlingException
 
 from app.ingestion.loaders.factory import get_loader
 from app.ingestion.ocr.orchestrator import OCROrchestrator
@@ -13,15 +16,33 @@ from app.ingestion.model import IngestionResult
 
 logger = logging.getLogger(__name__)
 
+# Infrastructure failures that are worth retrying (Qdrant/network blips).
+# These propagate to the Celery task; everything else is a content error and
+# is reported as IngestionResult(success=False) — retrying wouldn't help.
+TRANSIENT_EXCEPTIONS = (
+    ConnectionError,
+    TimeoutError,
+    httpx.TransportError,
+    ResponseHandlingException,
+)
+
 # only PDFs go through OCR in this pipeline
 OCR_ELIGIBLE_MIME_TYPES = {"application/pdf"}
 
-# these get created once when the module loads, so we are not
-# reloading the embedding model / reconnecting to qdrant every time
+# Cheap, stateless-per-document stages: created once when the module loads.
 ocr_orchestrator = OCROrchestrator()
 cleaning_orchestrator = CleaningOrchestrator()
 chunking_orchestrator = ChunkingOrchestrator()
-embedding_orchestrator = EmbeddingOrchestrator()
+
+
+@lru_cache(maxsize=1)
+def get_embedding_orchestrator() -> EmbeddingOrchestrator:
+    """
+    Built lazily on first use and then reused for the life of the process, so
+    the embedding models are loaded once — but importing this module never
+    connects to Qdrant, creates collections, or loads models.
+    """
+    return EmbeddingOrchestrator()
 
 def ingest_file(
     data: bytes,
@@ -78,7 +99,7 @@ def ingest_file(
             )
 
         # step 5: embed and put into qdrant
-        point_ids = embedding_orchestrator.embed_and_index(chunks)
+        point_ids = get_embedding_orchestrator().embed_and_index(chunks)
 
         return IngestionResult(
             filename=filename,
@@ -88,6 +109,10 @@ def ingest_file(
             point_ids=point_ids,
             warnings=warnings,
         )
+
+    except TRANSIENT_EXCEPTIONS:
+        logger.warning("transient failure while ingesting %s; will be retried", filename)
+        raise
 
     except Exception as e:
         logger.exception(f"ingestion failed for {filename}")
@@ -99,7 +124,7 @@ def ingest_file(
         )
 
 
-async def ingest_files(files: list[tuple[bytes, str, str]], metadata: dict | None = None) -> list[IngestionResult]:
+def ingest_files(files: list[tuple[bytes, str, str]], metadata: dict | None = None) -> list[IngestionResult]:
     """
     files is a list of (data, filename, mime_type)
     just loops and calls ingest_file one by one
@@ -107,7 +132,7 @@ async def ingest_files(files: list[tuple[bytes, str, str]], metadata: dict | Non
     results = []
 
     for data, filename, mime_type in files:
-        result = await ingest_file(data, filename, mime_type, metadata)
+        result = ingest_file(data, filename, mime_type, metadata)
         results.append(result)
 
     return results
@@ -124,11 +149,21 @@ def run_ocr_on_pages(documents: list[Document], pdf_data: bytes):
     for document in documents:
         page_number = document.metadata.get("page_number", 1)
 
-        result = ocr_orchestrator.process_page(
-            pdf_data=pdf_data,
-            page_number=page_number,
-            extracted_text=document.page_content,
-        )
+        try:
+            result = ocr_orchestrator.process_page(
+                pdf_data=pdf_data,
+                page_number=page_number,
+                extracted_text=document.page_content,
+            )
+        except Exception as exc:
+            # One bad page must not fail the whole document: keep whatever
+            # text extraction produced (cleaning drops it if empty).
+            logger.warning("OCR failed for page %s, keeping extracted text: %s", page_number, exc)
+            warnings.append(f"page_{page_number}: ocr_failed: {exc}")
+            new_metadata = dict(document.metadata)
+            new_metadata["ocr_failed"] = True
+            new_documents.append(Document(page_content=document.page_content, metadata=new_metadata))
+            continue
 
         if result.used_ocr:
             new_metadata = dict(document.metadata)

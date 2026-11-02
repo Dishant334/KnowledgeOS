@@ -2,6 +2,8 @@
 
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue, DatetimeRange
 
+from app.ingestion.embedding.vector_store import payload_key
+
 
 def build_qdrant_filter(
     doc_type: str | None = None,
@@ -18,15 +20,15 @@ def build_qdrant_filter(
     conditions = []
 
     if doc_type:
-        conditions.append(FieldCondition(key="doc_type", match=MatchValue(value=doc_type)))
+        conditions.append(FieldCondition(key=payload_key("doc_type"), match=MatchValue(value=doc_type)))
 
     if uploaded_by:
-        conditions.append(FieldCondition(key="uploaded_by", match=MatchValue(value=uploaded_by)))
+        conditions.append(FieldCondition(key=payload_key("uploaded_by"), match=MatchValue(value=uploaded_by)))
 
     if created_after or created_before:
         conditions.append(
             FieldCondition(
-                key="created_at",
+                key=payload_key("created_at"),
                 range=DatetimeRange(gte=created_after, lte=created_before),
             )
         )

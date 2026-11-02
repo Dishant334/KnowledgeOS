@@ -10,9 +10,9 @@ from app.ingestion.embedding.models import EmbeddingConfig
 
 class BGEM3DenseEmbedder(Embeddings):
     """
-    Dense embedder wrapping fastembed's BGE-M3 model directly (not via
+    Dense embedder wrapping fastembed's BGE (bge-large-en-v1.5) model directly (not via
     LangChain's prebuilt FastEmbedEmbeddings), so we control:
-      - the query prefix BGE-M3 recommends for search queries
+      - the query instruction BGE v1.5 recommends for search queries
         (improves retrieval accuracy vs. no prefix)
       - batch size passed straight to fastembed's ONNX inference
 
@@ -21,14 +21,15 @@ class BGEM3DenseEmbedder(Embeddings):
     without any adapter code.
     """
 
-    # BGE-M3's recommended instruction prefix for query-side embeddings.
+    # BGE v1.5's recommended instruction for short query -> passage retrieval
+    # (fastembed does not add it). Applied to queries only.
     # Document-side embeddings use no prefix. This asymmetry is exactly
     # what the prebuilt LangChain wrapper doesn't let you control.
-    QUERY_PREFIX = "query: "
+    QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
     def __init__(self, config: EmbeddingConfig):
         self.config = config
-        self._model = TextEmbedding(model_name=config.dense_model_name)
+        self._model = TextEmbedding(model_name=config.dense_model_name, cache_dir=config.cache_dir)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         embeddings = self._model.embed(texts, batch_size=self.config.batch_size)
@@ -54,7 +55,7 @@ class BM25SparseEmbedder(SparseEmbeddings):
 
     def __init__(self, config: EmbeddingConfig):
         self.config = config
-        self._model = SparseTextEmbedding(model_name=config.sparse_model_name)
+        self._model = SparseTextEmbedding(model_name=config.sparse_model_name, cache_dir=config.cache_dir)
 
     def embed_documents(self, texts: list[str]) -> list[SparseVector]:
         results = self._model.embed(texts, batch_size=self.config.batch_size)
@@ -64,8 +65,14 @@ class BM25SparseEmbedder(SparseEmbeddings):
         ]
 
     def embed_query(self, text: str) -> SparseVector:
-        result = list(self._model.embed([text]))[0]
-        return SparseVector(indices=result.indices.tolist(), values=result.values.tolist())
+        # query_embed (not embed): BM25's TF saturation / length normalization
+        # belongs on the document side only. The query side marks each term as
+        # present (weight 1); Qdrant applies IDF (modifier=IDF).
+        result = next(iter(self._model.query_embed(text)))
+        return SparseVector(
+            indices=result.indices.tolist(),
+            values=[float(v) for v in result.values.tolist()],
+        )
 
 
 def build_dense_embedder(config: EmbeddingConfig) -> BGEM3DenseEmbedder:

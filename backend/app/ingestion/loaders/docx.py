@@ -12,7 +12,7 @@ from langchain_core.documents import Document
 
 class DOCXLoader(BaseLoader):
 
-    async def load(
+    def load(
         self,
         data: bytes,
         filename: str,
@@ -45,16 +45,18 @@ class DOCXLoader(BaseLoader):
             for document in documents:
                 result.append(
                     Document(
-                    {
-                        "content": document.page_content,
-                        "metadata": {
+                        page_content=document.page_content,
+                        metadata={
                             **metadata,
+                            # Loader metadata first: Docx2txtLoader sets
+                            # "source" to the temp-file path, which must not
+                            # override the real filename below.
+                            **document.metadata,
                             "filename": filename,
                             "file_type": "docx",
                             "source": filename,
-                            **document.metadata,
                         },
-                    })
+                    )
                 )
 
             return result

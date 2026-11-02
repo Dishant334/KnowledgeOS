@@ -12,7 +12,7 @@ from app.ingestion.loaders.base import BaseLoader
 
 class PPTXLoader(BaseLoader):
 
-    async def load(
+    def load(
         self,
         data: bytes,
         filename: str,

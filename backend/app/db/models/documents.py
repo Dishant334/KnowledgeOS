@@ -1,12 +1,17 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
 
 class Document(Base):
     __tablename__ = "documents"
+    __table_args__ = (
+        # Per-user dedup: the same file may be uploaded by different users,
+        # but only once per user.
+        UniqueConstraint("user_id", "document_hash", name="uq_documents_user_id_document_hash"),
+    )
 
     id: Mapped[int] = mapped_column(
         primary_key=True,
@@ -72,4 +77,12 @@ class Document(Base):
     user = relationship(
         "User",
         back_populates="documents",
-    )  
+    )
+
+    blob = relationship(
+        "DocumentBlob",
+        back_populates="document",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

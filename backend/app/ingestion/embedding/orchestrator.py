@@ -9,7 +9,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 
 from app.ingestion.embedding.models import EmbeddingConfig
-from app.ingestion.embedding.vector_store import get_vector_store
+from app.ingestion.embedding.vector_store import delete_document_points, get_vector_store
 
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,12 @@ class EmbeddingOrchestrator:
             "source",
             "unknown",
         )
+
+        # Re-indexing a document replaces it: drop its existing points first so
+        # stale chunks (e.g. from an interrupted run) never linger.
+        document_id = chunks[0].metadata.get("document_id")
+        if document_id is not None:
+            delete_document_points(document_id, self.config, client=self.vector_store.client)
 
         logger.info(
             "Indexing %d chunks into collection '%s' "
@@ -146,9 +152,19 @@ class EmbeddingOrchestrator:
         """
         Generate a deterministic UUID for a chunk.
 
-        Same source + same location + same chunk index
-        produces the same UUID.
+        Keyed by document_id + chunk_index (chunk_index is unique across the
+        whole document), so two documents that share a filename never
+        overwrite each other's points, and re-ingesting a document overwrites
+        its own points in place.
+
+        Falls back to source + location + chunk index for chunks without a
+        document_id (e.g. ad-hoc ingestion outside the upload flow).
         """
+
+        document_id = chunk.metadata.get("document_id")
+        if document_id is not None:
+            chunk_index = chunk.metadata.get("chunk_index", 0)
+            return str(uuid5(NAMESPACE_URL, f"document:{document_id}:chunk:{chunk_index}"))
 
         source = str(
             chunk.metadata.get(

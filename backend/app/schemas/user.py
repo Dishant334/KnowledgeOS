@@ -15,7 +15,7 @@ class UserResponse(BaseModel):
 class UserOut(BaseModel):
     id: int
     clerk_user_id: str
-    email: str
+    email: str | None   # nullable in the DB (e.g. user provisioned before webhook sync)
     name: str | None
     created_at: datetime
     updated_at: datetime

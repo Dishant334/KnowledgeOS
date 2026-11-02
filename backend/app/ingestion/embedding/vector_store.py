@@ -1,19 +1,28 @@
 # app/ingestion/embedding/vector_store.py
 
+import logging
+
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import (
     Distance,
     VectorParams,
     SparseVectorParams,
     PayloadSchemaType,
+    Modifier,
+    Filter,
+    FieldCondition,
+    MatchValue,
+    FilterSelector,
 )
 from langchain_qdrant import QdrantVectorStore, RetrievalMode
 
 from app.ingestion.embedding.embedders import build_dense_embedder, build_sparse_embedder
 from app.ingestion.embedding.models import EmbeddingConfig
 
-# BGE-M3 dense vector dimensionality — fixed by the model itself.
-BGE_M3_DIM = 1024
+logger = logging.getLogger(__name__)
+
+# Dense vector dimensionality — fixed by the model (bge-large-en-v1.5: 1024).
+DENSE_DIM = 1024
 
 # Maps a payload field name to the Qdrant schema type it should be
 # indexed as. created_at needs DATETIME so range filters (e.g. "docs
@@ -28,24 +37,40 @@ _PAYLOAD_FIELD_SCHEMAS: dict[str, PayloadSchemaType] = {
 }
 
 
+def payload_key(field_name: str) -> str:
+    """
+    Qdrant payload path for a chunk-metadata field. langchain_qdrant stores
+    Document.metadata nested under payload["metadata"], so indexes and
+    filters must target "metadata.<field>", not "<field>".
+    """
+    return f"{QdrantVectorStore.METADATA_KEY}.{field_name}"
+
+
 def get_qdrant_client(config: EmbeddingConfig) -> QdrantClient:
     return QdrantClient(url=config.qdrant_url, api_key=config.qdrant_api_key)
 
 
 def ensure_collection(client: QdrantClient, config: EmbeddingConfig) -> None:
     """
-    Creates the collection with both a dense vector space (BGE-M3,
+    Creates the collection with both a dense vector space (BGE,
     cosine distance) and a named sparse vector space (BM25), if it
     doesn't already exist. Idempotent — safe to call on every startup.
+
+    The sparse space uses modifier=IDF: fastembed's Qdrant/bm25 emits
+    term-frequency weights only and expects Qdrant to apply IDF
+    server-side. This is fixed at creation time — an existing collection
+    is never modified here, only warned about.
     """
-    if not client.collection_exists(config.collection_name):
+    if client.collection_exists(config.collection_name):
+        _warn_if_sparse_idf_missing(client, config)
+    else:
         client.create_collection(
             collection_name=config.collection_name,
             vectors_config={
-                "dense": VectorParams(size=BGE_M3_DIM, distance=Distance.COSINE),
+                "dense": VectorParams(size=DENSE_DIM, distance=Distance.COSINE),
             },
             sparse_vectors_config={
-                "sparse": SparseVectorParams(),
+                "sparse": SparseVectorParams(modifier=Modifier.IDF),
             },
         )
 
@@ -53,6 +78,17 @@ def ensure_collection(client: QdrantClient, config: EmbeddingConfig) -> None:
     # collection was just created or already existed — covers the case
     # where the collection was created before indexing was added.
     ensure_payload_indexes(client, config)
+
+
+def _warn_if_sparse_idf_missing(client: QdrantClient, config: EmbeddingConfig) -> None:
+    info = client.get_collection(config.collection_name)
+    sparse = (info.config.params.sparse_vectors or {}).get("sparse")
+    if sparse is None or sparse.modifier != Modifier.IDF:
+        logger.warning(
+            "Qdrant collection '%s' sparse vector space lacks modifier=IDF; BM25 "
+            "scores ignore term rarity. Recreate the collection (and re-ingest) to fix.",
+            config.collection_name,
+        )
 
 
 def ensure_payload_indexes(client: QdrantClient, config: EmbeddingConfig) -> None:
@@ -66,21 +102,49 @@ def ensure_payload_indexes(client: QdrantClient, config: EmbeddingConfig) -> Non
     already_indexed = set(collection_info.payload_schema.keys())
 
     for field_name in config.indexed_payload_fields:
-        if field_name in already_indexed:
+        key = payload_key(field_name)
+        if key in already_indexed:
             continue
 
         schema_type = _PAYLOAD_FIELD_SCHEMAS.get(field_name, PayloadSchemaType.KEYWORD)
 
         client.create_payload_index(
             collection_name=config.collection_name,
-            field_name=field_name,
+            field_name=key,
             field_schema=schema_type,
         )
 
 
+def document_points_filter(document_id) -> Filter:
+    return Filter(
+        must=[FieldCondition(key=payload_key("document_id"), match=MatchValue(value=str(document_id)))]
+    )
+
+
+def delete_document_points(
+    document_id,
+    config: EmbeddingConfig | None = None,
+    client: QdrantClient | None = None,
+) -> None:
+    """
+    Removes every point belonging to a document. Needs only a Qdrant client
+    (no embedding models), so the API can call it cheaply. No-op if the
+    collection doesn't exist yet. Raises on Qdrant errors.
+    """
+    config = config or EmbeddingConfig()
+    client = client or get_qdrant_client(config)
+    if not client.collection_exists(config.collection_name):
+        return
+    client.delete(
+        collection_name=config.collection_name,
+        points_selector=FilterSelector(filter=document_points_filter(document_id)),
+        wait=True,
+    )
+
+
 def get_vector_store(config: EmbeddingConfig) -> QdrantVectorStore:
     """
-    Builds a hybrid QdrantVectorStore: dense (BGE-M3) + sparse (BM25),
+    Builds a hybrid QdrantVectorStore: dense (BGE) + sparse (BM25),
     fused via RRF at query time. Collection and payload indexes are
     created here if absent.
     """

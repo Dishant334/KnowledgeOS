@@ -11,7 +11,7 @@ from app.ingestion.loaders.base import BaseLoader
 
 class XLSXLoader(BaseLoader):
 
-    async def load(
+    def load(
         self,
         data: bytes,
         filename: str,

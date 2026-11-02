@@ -7,7 +7,20 @@ from alembic import context
 from app.core.config import settings
 from app.db.database import Base
 
-from app.db.models import User, Document, Conversation, Message
+from app.db.models import User, Document, DocumentBlob, Conversation, Message
+
+# Tables owned by libraries, not by our models. Without this filter,
+# autogenerate/check would propose DROPPING them.
+#   message_store: langchain_postgres chat history (app/generation/memory.py)
+EXTERNALLY_MANAGED_TABLES = {"message_store"}
+
+
+def include_object(object, name, type_, reflected, compare_to):
+    table = object if type_ == "table" else getattr(object, "table", None)
+    table_name = name if type_ == "table" else getattr(table, "name", None)
+    if reflected and compare_to is None and table_name in EXTERNALLY_MANAGED_TABLES:
+        return False
+    return True
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -51,6 +64,8 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
+        compare_type=True,
     )
 
     with context.begin_transaction():
@@ -72,7 +87,10 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
+            compare_type=True,
         )
 
         with context.begin_transaction():

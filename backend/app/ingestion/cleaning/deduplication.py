@@ -32,6 +32,11 @@ class RepeatedLineDeduplicator(DocumentCleaner):
         self.min_line_length = min_line_length
         self._seen: dict[str, dict[str, int]] = defaultdict(dict)
 
+    def reset(self) -> None:
+        """Forget all seen lines. Called at the start of each source document
+        so state never leaks between files (or grows unbounded in a worker)."""
+        self._seen.clear()
+
     def clean(self, document: Document) -> Document:
         source = document.metadata.get("source", "__unknown__")
         counts = self._seen[source]

@@ -8,12 +8,17 @@ from app.core.config import settings
 class EmbeddingConfig:
     qdrant_url: str = settings.qdrant_url
     qdrant_api_key: str | None = None
-    collection_name: str = "documents"
+    collection_name: str = settings.qdrant_collection
 
-    dense_model_name: str = "BAAI/bge-m3"
+    # Must be in fastembed's TextEmbedding catalogue (bge-m3 is not, in fastembed 0.8).
+    # 1024-dim, matching DENSE_DIM in vector_store.py.
+    dense_model_name: str = "BAAI/bge-large-en-v1.5"
     sparse_model_name: str = "Qdrant/bm25"
 
     batch_size: int = 32
+
+    # None = fastembed default (FASTEMBED_CACHE_PATH env or system temp dir).
+    cache_dir: str | None = settings.fastembed_cache_path
 
     # Phase 3 — payload fields that need a Qdrant index for filtered
     # search to be fast (not a full collection scan).

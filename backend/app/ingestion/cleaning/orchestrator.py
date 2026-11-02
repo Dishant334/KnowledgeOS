@@ -113,6 +113,9 @@ class CleaningOrchestrator:
         and relies on seeing them in sequence to detect running headers/
         footers. Dropped documents (EmptyContentFilter) are excluded.
         """
+        # One batch == one source document: start repeated-line detection fresh.
+        self.repeated_line_deduplicator.reset()
+
         results = []
         for document in documents:
             cleaned = self.process_document(document)

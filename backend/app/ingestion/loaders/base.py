@@ -1,7 +1,6 @@
 # app/ingestion/loaders/base.py
 
 from abc import ABC, abstractmethod
-from pathlib import Path
 from typing import Any
 from langchain_core.documents import Document
 
@@ -17,49 +16,32 @@ class BaseLoader(ABC):
     - HTML
     - XLSX
     - PPTX
+
+    Synchronous by design: loaders do CPU/file work only and are called from
+    the synchronous ingestion pipeline (Celery worker).
     """
 
     @abstractmethod
-    async def load(
+    def load(
         self,
-        data:bytes,
+        data: bytes,
+        filename: str,
+        metadata: dict[str, Any] | None = None,
     ) -> list[Document]:
         """
-        Load and extract content from a file.
+        Extract content from raw file bytes.
 
         Args:
-            file_path: Path to the source file.
+            data: Raw file bytes (as stored in Postgres).
+            filename: Original filename, used for metadata/citations.
+            metadata: Extra metadata merged into every returned Document.
 
         Returns:
-            A list of document units.
-
-            Each unit should contain:
-                {
-                    "content": str,
-                    "metadata": dict
-                }
-
-        Example:
-
-            [
-                {
-                    "content": "Some extracted text...",
-                    "metadata": {
-                        "source": "document.pdf",
-                        "file_type": "pdf",
-                        "page_number": 1,
-                    },
-                }
-            ]
+            A list of LangChain Documents (page_content + metadata), e.g. one
+            per PDF page, slide, or spreadsheet row.
 
         Raises:
-            FileNotFoundError:
-                If the file does not exist.
-
-            ValueError:
-                If the file format is unsupported or invalid.
-
-            Exception:
-                Loader-specific extraction errors.
+            ValueError: If the data is empty or the format is invalid.
+            Exception: Loader-specific extraction errors.
         """
-        pass
+        raise NotImplementedError

@@ -1,12 +1,17 @@
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # Python
 __pycache__/
 *.pyc
 .venv/
+.venv-*/
 venv/
+
+# Local model caches (fastembed / Hugging Face)
+.fastembed_cache/
 
 # IDE
 .vscode/

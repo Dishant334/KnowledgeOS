@@ -12,7 +12,7 @@ from app.ingestion.loaders.base import BaseLoader
 
 class CSVFileLoader(BaseLoader):
 
-    async def load(
+    def load(
         self,
         data: bytes,
         filename: str,
@@ -45,16 +45,19 @@ class CSVFileLoader(BaseLoader):
             for row_index,document in  enumerate(documents):
                 result.append(
                     Document(
-                    {
-                        "content": document.page_content,
-                        "metadata": {
+                        page_content=document.page_content,
+                        metadata={
                             **metadata,
+                            # Loader metadata first: CSVLoader sets "source"
+                            # to the temp-file path, which must not override
+                            # the real filename below.
+                            **document.metadata,
                             "filename": filename,
+                            "source": filename,
                             "file_type": "csv",
                             "row_index": document.metadata.get("row", row_index),
-                            **document.metadata,
                         },
-                    })
+                    )
                 )
 
             return result

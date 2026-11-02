@@ -17,6 +17,8 @@ _MIME_TO_DOCUMENT_TYPE: dict[str, DocumentType] = {
     "text/csv": DocumentType.TABULAR,
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": DocumentType.TABULAR,
     "text/html": DocumentType.HTML,
+    "text/plain": DocumentType.PROSE,
+    "text/markdown": DocumentType.PROSE,
 }
 
 _STRATEGY_BUILDERS = {

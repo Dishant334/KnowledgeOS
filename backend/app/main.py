@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy import text
 from app.routers.auth import router as auth_router
+from app.routers.document import router as document_router
 from app.db.database import engine
 from app.generation.memory import ensure_message_table
 
@@ -40,3 +41,4 @@ def test_db():
 
 
 app.include_router(auth_router)
+app.include_router(document_router)

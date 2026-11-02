@@ -1,13 +1,14 @@
 # Dockerfile
 
 #1. Base docker image
-FROM python:3.11-slim AS base
+FROM python:3.13-slim AS base
 
 #2. Install some deps
 # tesseract needed for OCR, libpq for psycopg, build tools for any
 # packages that compile from source (some ML deps do)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
+    libmagic1 \
     libpq-dev \
     gcc \
     curl \
