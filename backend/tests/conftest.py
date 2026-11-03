@@ -199,6 +199,8 @@ def clean_tables():
 
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE users RESTART IDENTITY CASCADE"))
+        # long-term memory lives in its own tables (created on first use)
+        conn.execute(text("DO $$ BEGIN IF to_regclass('public.store') IS NOT NULL THEN DELETE FROM store; END IF; END $$"))
 
 
 def unique_clerk_id() -> str:
@@ -297,10 +299,13 @@ def retrieval_corpus():
         client.delete_collection(config.collection_name)
 
 
-def make_fake_llm(answer="Employees get twenty days of paid vacation [1].", rewritten=None, variants=None, calls=None):
+def make_fake_llm(answer="Employees get twenty days of paid vacation [1].", rewritten=None, variants=None, calls=None,
+                  summary=None, memories_json=None):
     """
     A fake chat model (any LangChain Runnable works in a chain). It looks at the
     prompt to decide which pipeline step is calling it:
+      long-term memory prompt     -> `memories_json` (a JSON list as text; "[]" by default)
+      conversation summary prompt -> `summary`
       rewrite prompt   -> `rewritten`
       multi-query      -> one `variants` entry per line
       answer prompt    -> `answer`
@@ -312,6 +317,10 @@ def make_fake_llm(answer="Employees get twenty days of paid vacation [1].", rewr
         text = prompt_value.to_string()
         if calls is not None:
             calls.append(text)
+        if "running summary of a conversation" in text:
+            return summary or "SUMMARY OF EARLIER MESSAGES"
+        if "You maintain the long-term memory" in text:
+            return memories_json if memories_json is not None else "[]"
         if "Standalone query" in text:
             return rewritten or "rewritten question"
         if "different phrasings" in text:

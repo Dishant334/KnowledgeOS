@@ -3,6 +3,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.db.models.user import User
+from app.memory.store import delete_all_memories
 
 # All writes go through INSERT ... ON CONFLICT on the unique users.clerk_user_id
 # index, so concurrent/duplicate webhook deliveries and the first authenticated
@@ -60,5 +61,9 @@ def upsert_user_from_clerk_event(
 def delete_user_by_clerk_id(db: Session, clerk_user_id: str) -> None:
     user = get_user_by_clerk_id(db, clerk_user_id)
     if user:
+        # Long-term memory lives outside the users table (no cascade), so delete it
+        # explicitly. If this fails the webhook errors and Clerk retries, instead of
+        # silently leaving a deleted user's personal facts behind.
+        delete_all_memories(user.id)
         db.delete(user)
         db.commit()

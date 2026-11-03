@@ -17,6 +17,9 @@ svix==2.0.0                       # Clerk webhook signature verification
 SQLAlchemy==2.0.52
 alembic==1.19.1
 psycopg2-binary==2.9.12           # SQLAlchemy driver for plain postgresql:// URLs
+psycopg[binary]==3.3.5            # used by the long-term memory store (psycopg 3)
+psycopg-pool==3.3.3               # connection pool for the memory store
+langgraph-checkpoint-postgres==3.2.0   # PostgresStore: long-term memory in our Postgres
 
 # --- Background jobs ---
 celery[redis]==5.6.3

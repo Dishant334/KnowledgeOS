@@ -1,13 +1,24 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from sqlalchemy import text
 from app.routers.auth import router as auth_router
 from app.routers.document import router as document_router
 from app.routers.retrieve import router as retrieve_router
 from app.routers.ask import router as ask_router
+from app.routers.memory import router as memory_router
 from app.db.database import engine
+from app.memory.store import close_memory_store
 
 
-app = FastAPI(title="KnowledgeOS")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    # shutdown: close the long-term memory connection pool (only if it was ever opened)
+    close_memory_store()
+
+
+app = FastAPI(title="KnowledgeOS", lifespan=lifespan)
 
 
 @app.get("/health")
@@ -34,3 +45,4 @@ app.include_router(auth_router)
 app.include_router(document_router)
 app.include_router(retrieve_router)
 app.include_router(ask_router)
+app.include_router(memory_router)

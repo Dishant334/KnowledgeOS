@@ -13,7 +13,8 @@ from app.db.models import User, Document, DocumentBlob, Conversation, Message
 # autogenerate/check would propose DROPPING them.
 #   message_store: leftover table from an earlier chat-history approach (no longer used by
 #                  the app; kept so autogenerate never proposes dropping existing data)
-EXTERNALLY_MANAGED_TABLES = {"message_store"}
+#   store, store_migrations: LangGraph PostgresStore tables (long-term memory, app/memory/store.py)
+EXTERNALLY_MANAGED_TABLES = {"message_store", "store", "store_migrations"}
 
 
 def include_object(object, name, type_, reflected, compare_to):

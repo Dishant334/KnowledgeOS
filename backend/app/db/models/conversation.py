@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -22,6 +22,21 @@ class Conversation(Base):
 
     title: Mapped[str | None] = mapped_column(
         String(255),
+        nullable=True,
+    )
+
+    # Rolling summary of the older part of the conversation. The messages
+    # themselves are never deleted; once they are folded into the summary,
+    # the prompt uses the summary instead of the raw text.
+    summary: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    # Messages with id <= this value are already covered by `summary`
+    # (a plain number, not a foreign key: it only marks a position).
+    summarized_until_message_id: Mapped[int | None] = mapped_column(
+        Integer,
         nullable=True,
     )
 
