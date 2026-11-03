@@ -1,6 +1,6 @@
 # app/retrieval/filters.py
 
-from qdrant_client.http.models import Filter, FieldCondition, MatchValue, DatetimeRange
+from qdrant_client.http.models import Filter, FieldCondition, MatchValue, MatchAny, DatetimeRange
 
 from app.ingestion.embedding.vector_store import payload_key
 
@@ -10,6 +10,7 @@ def build_qdrant_filter(
     uploaded_by: str | None = None,
     created_after: str | None = None,
     created_before: str | None = None,
+    document_ids: list[str] | None = None,
 ) -> Filter | None:
     """
     Builds a Qdrant Filter from user-facing retrieval parameters,
@@ -24,6 +25,10 @@ def build_qdrant_filter(
 
     if uploaded_by:
         conditions.append(FieldCondition(key=payload_key("uploaded_by"), match=MatchValue(value=uploaded_by)))
+
+    # Only search inside these documents (ids are stored as strings in the payload)
+    if document_ids:
+        conditions.append(FieldCondition(key=payload_key("document_id"), match=MatchAny(any=document_ids)))
 
     if created_after or created_before:
         conditions.append(

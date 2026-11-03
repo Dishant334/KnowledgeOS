@@ -20,6 +20,17 @@ class Settings(BaseSettings):
      # process environment, so this is passed explicitly (relative = CWD).
      fastembed_cache_path: str | None = None
 
+     # --- LLM (see app/generation/llm.py) ---
+     # Providers: "gemini" (cloud, free tier, deployable) or "ollama" (local).
+     # Empty llm_provider = no LLM configured (/ask answers 503).
+     llm_provider: str = ""
+     # Used automatically if the primary fails (quota, outage). Empty = no fallback.
+     llm_fallback_provider: str = ""
+     gemini_api_key: str = ""     # free key from Google AI Studio
+     gemini_model: str = "gemini-2.5-flash"
+     ollama_model: str = "qwen3:8b"
+     ollama_base_url: str = "http://localhost:11434"
+
      model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

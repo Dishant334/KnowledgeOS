@@ -1,6 +1,7 @@
 # app/ingestion/chunking/strategies.py
 
 import logging
+from itertools import groupby
 
 from langchain_core.documents import Document
 from langchain_text_splitters import (
@@ -153,18 +154,25 @@ class TableChunkingStrategy(ChunkingStrategy):
             return []
 
         chunks: list[Document] = []
-        for start in range(0, len(rows), self.config.rows_per_chunk):
-            group = rows[start : start + self.config.rows_per_chunk]
 
-            merged_text = "\n".join(row.page_content for row in group)
-            merged_metadata = dict(group[0].metadata)
-            merged_metadata["row_start"] = group[0].metadata.get("row_index", start)
-            merged_metadata["row_end"] = group[-1].metadata.get(
-                "row_index", start + len(group) - 1
-            )
-            merged_metadata.pop("row_index", None)  # no longer a single row
+        # A chunk must never mix rows of two different sheets (its sheet_name and
+        # row range would be wrong), so chunk each run of rows from one sheet separately.
+        # (CSV rows have no sheet_name: they all form one run.)
+        for _, sheet_rows in groupby(rows, key=lambda row: row.metadata.get("sheet_name")):
+            sheet_rows = list(sheet_rows)
 
-            chunks.append(Document(page_content=merged_text, metadata=merged_metadata))
+            for start in range(0, len(sheet_rows), self.config.rows_per_chunk):
+                group = sheet_rows[start : start + self.config.rows_per_chunk]
+
+                merged_text = "\n".join(row.page_content for row in group)
+                merged_metadata = dict(group[0].metadata)
+                merged_metadata["row_start"] = group[0].metadata.get("row_index", start)
+                merged_metadata["row_end"] = group[-1].metadata.get(
+                    "row_index", start + len(group) - 1
+                )
+                merged_metadata.pop("row_index", None)  # no longer a single row
+
+                chunks.append(Document(page_content=merged_text, metadata=merged_metadata))
 
         return chunks
 

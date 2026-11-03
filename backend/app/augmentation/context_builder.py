@@ -19,26 +19,30 @@ class ContextBuilder:
         self.encoding = tiktoken.get_encoding(encoding_name)
 
     def build(self, chunks: list[ScoredChunk]) -> AugmentedContext:
-        citations = build_citations(chunks)
-
-        parts = []
+        # First pick the chunks that fit in the token budget...
+        used_chunks = []
         total_tokens = 0
-        chunks_used = 0
 
-        for scored_chunk, citation in zip(chunks, citations):
-            text = scored_chunk.document.page_content
-            token_count = len(self.encoding.encode(text))
+        for scored_chunk in chunks:
+            token_count = len(self.encoding.encode(scored_chunk.document.page_content))
 
             if total_tokens + token_count > self.max_context_tokens:
-                continue
+                continue  # too big, try the next (smaller or lower-ranked) chunk
 
-            parts.append(f"{citation.marker} {text}")
+            used_chunks.append(scored_chunk)
             total_tokens += token_count
-            chunks_used += 1
+
+        # ...then number only those, so [1], [2], ... in the text always
+        # match the citations list.
+        citations = build_citations(used_chunks)
+        parts = [
+            f"{citation.marker} {scored_chunk.document.page_content}"
+            for scored_chunk, citation in zip(used_chunks, citations)
+        ]
 
         return AugmentedContext(
             prompt_context="\n\n".join(parts),
-            citations=citations[:chunks_used],
-            chunks_used=chunks_used,
-            chunks_dropped=len(chunks) - chunks_used,
+            citations=citations,
+            chunks_used=len(used_chunks),
+            chunks_dropped=len(chunks) - len(used_chunks),
         )

@@ -59,6 +59,11 @@ os.environ.update(
         "REDIS_URL": "redis://localhost:6379/15",
         # Separate Qdrant collection for tests; the app uses "documents".
         "QDRANT_COLLECTION": TEST_QDRANT_COLLECTION,
+        # Tests never use whatever LLM is configured in backend/.env (no real keys, no quota).
+        # LLM tests build their own models explicitly.
+        "LLM_PROVIDER": "",
+        "LLM_FALLBACK_PROVIDER": "",
+        "GEMINI_API_KEY": "",
     }
 )
 
@@ -213,3 +218,104 @@ def _drop_test_qdrant_collection():
             client.delete_collection(TEST_QDRANT_COLLECTION)
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Retrieval corpus: REAL models + REAL Qdrant (isolated test collection)
+# ---------------------------------------------------------------------------
+
+# (document_id, uploaded_by, doc_type, filename, [chunk texts])
+CORPUS = [
+    ("10", "1", "pdf", "handbook.pdf", [
+        "Employees receive twenty days of paid vacation per year.",
+        "Reimbursement requests must include the original receipt and be submitted within thirty days.",
+        "The cafeteria on the third floor serves lunch between noon and two.",
+        "Project Zephyrwood launches in the spring.",
+    ]),
+    ("11", "1", "md", "remote.md", [
+        "Remote work is allowed three days a week with manager approval.",
+    ]),
+    ("20", "2", "pdf", "berlin.pdf", [
+        "Employees of the Berlin office receive thirty days of paid vacation per year.",
+        "Confidential salary bands for the Berlin office are reviewed every January.",
+    ]),
+]
+
+
+@pytest.fixture(scope="module")
+def retrieval_corpus():
+    """
+    Indexes CORPUS into the isolated test collection with the real dense + BM25
+    models (the same code path the ingestion worker uses). Users "1" and "2" own
+    different documents. Recreated per test module; dropped afterwards.
+    """
+    from langchain_core.documents import Document
+
+    from app.ingestion.embedding.models import EmbeddingConfig
+    from app.ingestion.embedding.orchestrator import EmbeddingOrchestrator
+    from app.ingestion.embedding.vector_store import get_qdrant_client
+    from app.retrieval.orchestrator import get_search_store
+
+    config = EmbeddingConfig()
+    assert config.collection_name == TEST_QDRANT_COLLECTION
+    client = get_qdrant_client(config)
+    try:
+        client.get_collections()
+        if client.collection_exists(config.collection_name):
+            client.delete_collection(config.collection_name)
+        get_search_store.cache_clear()
+        orchestrator = EmbeddingOrchestrator(config)  # loads the real models
+    except Exception as exc:
+        pytest.skip(f"Qdrant or embedding models unavailable: {exc}")
+
+    for document_id, uploaded_by, doc_type, filename, texts in CORPUS:
+        chunks = [
+            Document(
+                page_content=text,
+                metadata={
+                    "document_id": document_id,
+                    "uploaded_by": uploaded_by,
+                    "doc_type": doc_type,
+                    "mime_type": "application/pdf",
+                    "source": filename,
+                    "source_name": filename,
+                    "page_number": 1,
+                    "chunk_index": i,
+                    "total_chunks": len(texts),
+                    "embedding_model": config.dense_model_name,
+                    "created_at": "2026-11-03T10:00:00Z",
+                },
+            )
+            for i, text in enumerate(texts)
+        ]
+        orchestrator.embed_and_index(chunks)
+
+    yield config
+
+    get_search_store.cache_clear()
+    if client.collection_exists(config.collection_name):
+        client.delete_collection(config.collection_name)
+
+
+def make_fake_llm(answer="Employees get twenty days of paid vacation [1].", rewritten=None, variants=None, calls=None):
+    """
+    A fake chat model (any LangChain Runnable works in a chain). It looks at the
+    prompt to decide which pipeline step is calling it:
+      rewrite prompt   -> `rewritten`
+      multi-query      -> one `variants` entry per line
+      answer prompt    -> `answer`
+    Every prompt it receives is appended to `calls` (if given).
+    """
+    from langchain_core.runnables import RunnableLambda
+
+    def fake(prompt_value):
+        text = prompt_value.to_string()
+        if calls is not None:
+            calls.append(text)
+        if "Standalone query" in text:
+            return rewritten or "rewritten question"
+        if "different phrasings" in text:
+            return "\n".join(variants or [])
+        return answer
+
+    return RunnableLambda(fake)

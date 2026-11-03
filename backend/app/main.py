@@ -1,23 +1,13 @@
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from sqlalchemy import text
 from app.routers.auth import router as auth_router
 from app.routers.document import router as document_router
+from app.routers.retrieve import router as retrieve_router
+from app.routers.ask import router as ask_router
 from app.db.database import engine
-from app.generation.memory import ensure_message_table
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # startup
-    ensure_message_table()
-    yield
-    # shutdown (nothing to clean up yet — add teardown code here later
-    # if needed, e.g. closing the psycopg connection in memory.py)
-
-
-app = FastAPI(title="KnowledgeOS", lifespan=lifespan)
+app = FastAPI(title="KnowledgeOS")
 
 
 @app.get("/health")
@@ -42,3 +32,5 @@ def test_db():
 
 app.include_router(auth_router)
 app.include_router(document_router)
+app.include_router(retrieve_router)
+app.include_router(ask_router)

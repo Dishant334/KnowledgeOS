@@ -21,16 +21,31 @@ class ParentExpander:
     Not every chunk has parent_content — only PROSE (PDF/DOCX) chunks
     went through ParentChildStrategy. Slides/tabular/HTML chunks pass
     through unchanged.
+
+    Several top chunks can share the same parent section. They would all
+    expand to the same text, so only the best-ranked one is kept.
     """
 
     def expand(self, scored_chunks: list[ScoredChunk]) -> list[ScoredChunk]:
+        result = []
+        seen_parents = set()
+
         for scored_chunk in scored_chunks:
-            parent_content = scored_chunk.document.metadata.get("parent_content")
+            metadata = scored_chunk.document.metadata
+            parent_content = metadata.get("parent_content")
 
             if not parent_content:
-                continue  # not a PROSE chunk, or no parent — leave as-is
+                result.append(scored_chunk)  # not a PROSE chunk — leave as-is
+                continue
+
+            # parent_id is only unique inside one document, so include the document id
+            parent_key = (metadata.get("document_id"), metadata.get("parent_id"))
+            if parent_key in seen_parents:
+                continue
+            seen_parents.add(parent_key)
 
             scored_chunk.document.page_content = parent_content
             scored_chunk.expanded = True
+            result.append(scored_chunk)
 
-        return scored_chunks
+        return result

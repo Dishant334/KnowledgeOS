@@ -1,7 +1,10 @@
 # app/retrieval/reranker.py
 
+from functools import lru_cache
+
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 
+from app.core.config import settings
 from app.retrieval.model import ScoredChunk
 
 
@@ -9,7 +12,7 @@ class CrossEncoderReranker:
     """
     Reranks a candidate set of chunks against the query using a
     cross-encoder (bge-reranker, run locally via fastembed — same
-    "free, local" reasoning as the BGE-M3 embedder choice).
+    "free, local" reasoning as the BGE embedder choice).
 
     Cross-encoders score (query, document) pairs jointly, which is
     slower per-pair than the bi-encoder similarity search that
@@ -19,7 +22,10 @@ class CrossEncoderReranker:
     """
 
     def __init__(self, model_name: str = "BAAI/bge-reranker-base"):
-        self._model = TextCrossEncoder(model_name=model_name)
+        self._model = TextCrossEncoder(
+            model_name=model_name,
+            cache_dir=settings.fastembed_cache_path,
+        )
 
     def rerank(self, query: str, scored_chunks: list[ScoredChunk], top_k: int) -> list[ScoredChunk]:
         if not scored_chunks:
@@ -33,3 +39,9 @@ class CrossEncoderReranker:
 
         scored_chunks.sort(key=lambda sc: sc.rerank_score, reverse=True)
         return scored_chunks[:top_k]
+
+
+@lru_cache(maxsize=2)
+def get_reranker(model_name: str) -> CrossEncoderReranker:
+    """Loads the model the first time it is needed, then reuses it."""
+    return CrossEncoderReranker(model_name)

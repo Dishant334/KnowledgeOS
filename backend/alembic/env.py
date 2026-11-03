@@ -11,7 +11,8 @@ from app.db.models import User, Document, DocumentBlob, Conversation, Message
 
 # Tables owned by libraries, not by our models. Without this filter,
 # autogenerate/check would propose DROPPING them.
-#   message_store: langchain_postgres chat history (app/generation/memory.py)
+#   message_store: leftover table from an earlier chat-history approach (no longer used by
+#                  the app; kept so autogenerate never proposes dropping existing data)
 EXTERNALLY_MANAGED_TABLES = {"message_store"}
 
 
