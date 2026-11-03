@@ -228,11 +228,36 @@ def test_when_the_model_cites_nothing_the_sources_are_still_returned():
     "I do not have enough information to answer that.",
     "The context does not contain enough information to answer.",
     "There is not enough information in the documents.",
+    # wordings seen from real models in the live run / common alternatives
+    "The context does not provide information about when the Singapore office opens.",
+    "The documents don't mention the CEO's salary.",
+    "The provided context doesn't contain any details about that.",
+    "I cannot find the answer in the provided documents.",
+    "There is no information about this in the context.",
+    "I don't know.",
 ])
 def test_refusal_wording_variants_are_detected(answer):
     result = generate_answer("What is the CEO's salary?", fake_llm(answer), [chunk("The cafeteria opens at noon.")])
     assert result.abstained is True and result.citations == []
     assert result.answer == answer                         # the model's own wording is kept
+
+
+@pytest.mark.parametrize("answer", [
+    "Employees accrue 25 days of paid vacation per year.",
+    "The meal limit is $60 per day, and the policy doesn't have a separate breakfast limit.",
+    "You can't carry over more than 5 days to the next year.",
+    "Remote work is allowed three days per week with manager approval.",
+])
+def test_ordinary_answers_without_a_citation_are_not_mistaken_for_refusals(answer):
+    result = generate_answer("q?", fake_llm(answer), [chunk("some text")])
+    assert result.abstained is False
+
+
+def test_a_partial_answer_that_cites_a_source_stays_an_answer():
+    """From the live run: "does not include ... vacation rules. However, remote work is 3 days [1]"."""
+    answer = "The context does not include specific information about vacation rules. However, remote work is 3 days per week [1]."
+    result = generate_answer("q?", fake_llm(answer), [chunk("a"), chunk("b")])
+    assert result.abstained is False and [c.marker for c in result.citations] == ["[1]"]
 
 
 def test_an_answer_with_a_citation_is_not_a_refusal_even_if_it_mentions_missing_details():

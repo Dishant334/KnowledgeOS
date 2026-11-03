@@ -105,6 +105,23 @@ def test_parent_expansion_replaces_text_and_dedupes_same_parent():
     assert out[0].expanded and not out[2].expanded
 
 
+def test_pages_of_one_pdf_are_not_merged_even_though_every_page_numbers_its_sections_from_zero():
+    """
+    Found by the live run: every page's first section is called "handbook.pdf_p0", so de-duplicating
+    by that id dropped all pages but the best-ranked one ("vacation AND remote work" lost one of them).
+    """
+    vacation_page = chunk("vacation child", document_id="1", parent_id="handbook.pdf_p0", page_number=1,
+                          parent_content="PAGE 1: 25 days of vacation")
+    remote_page = chunk("remote child", document_id="1", parent_id="handbook.pdf_p0", page_number=3,
+                        parent_content="PAGE 3: remote work 3 days")
+    sibling_on_page_3 = chunk("remote child 2", document_id="1", parent_id="handbook.pdf_p0", page_number=3,
+                              parent_content="PAGE 3: remote work 3 days")
+
+    out = ParentExpander().expand([remote_page, vacation_page, sibling_on_page_3])
+
+    assert [c.document.page_content for c in out] == ["PAGE 3: remote work 3 days", "PAGE 1: 25 days of vacation"]
+
+
 # --- context builder: citation numbers match the text ----------------------------------
 
 

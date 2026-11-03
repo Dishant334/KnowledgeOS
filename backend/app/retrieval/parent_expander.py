@@ -38,8 +38,10 @@ class ParentExpander:
                 result.append(scored_chunk)  # not a PROSE chunk — leave as-is
                 continue
 
-            # parent_id is only unique inside one document, so include the document id
-            parent_key = (metadata.get("document_id"), metadata.get("parent_id"))
+            # Same section = same document AND same section text. (parent_id is NOT
+            # enough: every page of a PDF numbers its sections from 0, so "file_p0"
+            # repeats on each page and different pages would be wrongly merged.)
+            parent_key = (metadata.get("document_id"), parent_content)
             if parent_key in seen_parents:
                 continue
             seen_parents.add(parent_key)

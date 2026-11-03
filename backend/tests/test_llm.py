@@ -54,7 +54,8 @@ def test_gemini_is_built_with_safe_settings(configure):
     configure("gemini", gemini_key="fake-key-for-test")
     model = get_llm()
     assert type(model).__name__ == "ChatGoogleGenerativeAI"
-    assert "gemini-2.5-flash" in model.model
+    assert settings.gemini_model in model.model
+    assert settings.gemini_model != "gemini-2.5-flash"      # retired for new accounts (404)
     assert model.temperature == 0
     assert 1 <= model.max_retries <= 2     # the library default is 6: too slow to reach the fallback
     assert model.timeout == 30
@@ -117,6 +118,18 @@ def test_misconfigured_primary_falls_back_to_the_working_provider(configure):
     configure("gemini", "ollama")          # no Gemini key
     model = get_llm()
     assert type(model).__name__ == "ChatOllama"   # used directly, not wrapped
+
+
+def test_failed_provider_calls_are_logged_so_a_silent_fallback_is_noticed(configure, caplog, monkeypatch):
+    monkeypatch.setattr(logging.getLogger("app.generation.llm"), "disabled", False)
+    configure("ollama", "gemini", gemini_key="fake-key-for-test")
+    chain = get_llm()
+    handlers = [type(h).__name__ for h in chain.runnable.callbacks] + [type(h).__name__ for m in chain.fallbacks for h in m.callbacks]
+    assert handlers == ["LogProviderErrors", "LogProviderErrors"]
+
+    with caplog.at_level(logging.WARNING, logger="app.generation.llm"):
+        chain.runnable.callbacks[0].on_llm_error(ConnectionError("connection refused"))
+    assert any("'ollama' failed" in r.message and "ConnectionError" in r.message for r in caplog.records)
 
 
 def test_unknown_provider_is_rejected():

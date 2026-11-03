@@ -3,6 +3,8 @@
 import logging
 from functools import lru_cache
 
+from langchain_core.callbacks import BaseCallbackHandler
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -11,6 +13,22 @@ SUPPORTED_PROVIDERS = ("gemini", "ollama")
 
 # How long we wait for the local model before giving up (the fallback then answers)
 OLLAMA_TIMEOUT_SECONDS = 60
+
+
+class LogProviderErrors(BaseCallbackHandler):
+    """
+    Logs every failed model call. Without this, a broken provider (retired model name,
+    bad key, quota) would be hidden by the fallback silently answering instead.
+    """
+
+    def __init__(self, provider: str):
+        self.provider = provider
+
+    def on_llm_error(self, error, **kwargs):
+        logger.warning(
+            "LLM provider %r failed (%s: %s); the fallback provider, if any, will answer",
+            self.provider, type(error).__name__, str(error)[:200],
+        )
 
 
 def build_llm(provider: str):
@@ -38,6 +56,7 @@ def build_llm(provider: str):
             max_retries=2,       # keep this small (default is higher) so a quota error reaches the fallback quickly
             timeout=30,
             thinking_budget=0,   # no hidden "thinking" tokens (saves free quota; Flash models only)
+            callbacks=[LogProviderErrors("gemini")],
         )
 
     if provider == "ollama":
@@ -50,6 +69,7 @@ def build_llm(provider: str):
             num_ctx=8192,        # Ollama's default window is smaller than our prompts
             reasoning=False,     # Qwen3 would otherwise add <think>...</think> text to answers
             client_kwargs={"timeout": OLLAMA_TIMEOUT_SECONDS},  # a stuck local model must fall back, not hang
+            callbacks=[LogProviderErrors("ollama")],
         )
 
     raise ValueError(f"Unknown LLM provider {provider!r}; use one of {SUPPORTED_PROVIDERS}")

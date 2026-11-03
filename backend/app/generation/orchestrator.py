@@ -39,6 +39,26 @@ REFUSAL_PHRASES = (
     "does not provide enough information",
     "doesn't provide enough information",
     "insufficient information",
+    "no information",
+    "i don't know",
+    "i do not know",
+)
+
+# The same idea in many wordings: "does not provide / contain / mention ... information",
+# "cannot find ... the answer", "doesn't specify ... details"
+REFUSAL_PATTERN = re.compile(
+    r"\b(?:does not|doesn't|do not|don't|did not|didn't|cannot|can't|can not|unable to)\s+"
+    r"(?:\w+\s+){0,2}?(?:provide|contain|include|mention|specify|have|find|say)\b"
+    r"[^.\n]{0,60}?\b(?:information|details|answer)\b",
+    re.IGNORECASE,
+)
+
+# "The documents don't mention the CEO's salary": the subject is the source material
+# and the verb says it is silent on the topic.
+REFUSAL_PATTERN_SILENT_SOURCE = re.compile(
+    r"\b(?:context|documents?|text|sources?|passages?|policy|policies|files?)\b[^.\n]{0,40}?"
+    r"\b(?:does not|doesn't|do not|don't)\s+(?:\w+\s+){0,2}?(?:mention|specify|state|cover|address|say|include|contain|provide)\b",
+    re.IGNORECASE,
 )
 
 # Matches "[1]", "[12]" and also "[1, 2]"
@@ -112,7 +132,11 @@ def is_refusal(answer: str) -> bool:
         return False
 
     text = answer.lower().replace("’", "'")  # curly apostrophe -> '
-    return any(phrase in text for phrase in REFUSAL_PHRASES)
+    return (
+        any(phrase in text for phrase in REFUSAL_PHRASES)
+        or REFUSAL_PATTERN.search(text) is not None
+        or REFUSAL_PATTERN_SILENT_SOURCE.search(text) is not None
+    )
 
 
 def only_cited(citations: list[Citation], answer: str) -> list[Citation]:

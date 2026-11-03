@@ -27,7 +27,9 @@ class Settings(BaseSettings):
      # Used automatically if the primary fails (quota, outage). Empty = no fallback.
      llm_fallback_provider: str = ""
      gemini_api_key: str = ""     # free key from Google AI Studio
-     gemini_model: str = "gemini-2.5-flash"
+     # Free-tier Gemini models are retired quickly (2.5-flash already returns 404 for new accounts).
+     # List what your key can use with: google.genai Client(api_key=...).models.list()
+     gemini_model: str = "gemini-3.5-flash"
      ollama_model: str = "qwen3:8b"
      ollama_base_url: str = "http://localhost:11434"
 
