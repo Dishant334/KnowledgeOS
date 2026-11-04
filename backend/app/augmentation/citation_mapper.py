@@ -4,6 +4,9 @@ from app.retrieval.model import ScoredChunk
 from app.augmentation.model import Citation
 
 
+# How much of the cited passage a citation carries (enough for a source card, small enough to store with every answer)
+SNIPPET_CHARS = 600
+
 # Metadata keys the HTML chunker writes for the headings above a chunk
 HTML_HEADER_KEYS = ("Header 1", "Header 2", "Header 3")
 
@@ -15,6 +18,14 @@ def get_section_title(metadata: dict) -> str | None:
 
     headings = [metadata[key] for key in HTML_HEADER_KEYS if metadata.get(key)]
     return " > ".join(headings) or None
+
+
+def make_snippet(text: str, max_chars: int = SNIPPET_CHARS) -> str:
+    """The first max_chars characters of a passage (whitespace tidied), with "..." if it was cut."""
+    text = " ".join(text.split())
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars].rstrip() + "..."
 
 
 def build_citations(chunks: list[ScoredChunk]) -> list[Citation]:
@@ -37,6 +48,7 @@ def build_citations(chunks: list[ScoredChunk]) -> list[Citation]:
                 sheet_name=metadata.get("sheet_name"),
                 row_start=metadata.get("row_start"),
                 row_end=metadata.get("row_end"),
+                snippet=make_snippet(scored_chunk.document.page_content),
             )
         )
     return citations

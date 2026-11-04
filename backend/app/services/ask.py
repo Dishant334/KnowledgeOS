@@ -173,8 +173,22 @@ def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[
         db.add(conversation)
         db.flush()  # gives the conversation an id
 
+    if conversation.title is None:
+        # a chat started with "New chat" has no title yet: the first question names it
+        # (a title given at creation, or set by renaming, is never replaced)
+        conversation.title = request.query[:80]
+
+    citations = [Citation(**asdict(citation)) for citation in generation.citations]
+
     db.add(Message(conversation_id=conversation.id, role="user", content=request.query))
-    assistant_message = Message(conversation_id=conversation.id, role="assistant", content=generation.answer)
+    # The citations are saved with the answer (same shape as in the response), so the conversation
+    # can be shown again later, source cards included.
+    assistant_message = Message(
+        conversation_id=conversation.id,
+        role="assistant",
+        content=generation.answer,
+        citations=[citation.model_dump() for citation in citations],
+    )
     db.add(assistant_message)
     db.commit()
     db.refresh(assistant_message)
@@ -183,7 +197,7 @@ def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[
         conversation_id=conversation.id,
         message_id=assistant_message.id,
         answer=generation.answer,
-        citations=[Citation(**asdict(citation)) for citation in generation.citations],
+        citations=citations,
         abstained=generation.abstained,
         created_at=assistant_message.created_at,
     )

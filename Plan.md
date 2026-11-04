@@ -165,7 +165,11 @@ Retrieved chunks → context builder → prompt → LLM → answer + citations
 
 **Streaming (✅):** `POST /ask/stream` sends the answer as Server-Sent Events (`token`, `done`, `error`) while the model writes it; `POST /ask` still returns the whole answer as JSON. Both run the same code (`stream_answer` / `ask_stream`).
 
-**Deferred until the frontend exists:** saving citations with messages, and an endpoint that shows conversation summaries.
+**Citations for the frontend (✅):** each answer's citations (source, page/section/sheet/slide, plus a `snippet` of the cited passage) are saved with the message. `GET /conversations/{id}` returns the whole chat with all citations in a single request, and `GET /conversations` lists conversations for a sidebar.
+
+**Conversation management (✅):** `POST /conversations` starts an empty "New chat" (named from its first question), `PATCH /conversations/{id}` renames, `DELETE /conversations/{id}` removes the chat with its messages and citations (documents and long-term memory facts stay).
+
+**Deferred until the frontend exists:** an endpoint that shows conversation summaries.
 
 ---
 

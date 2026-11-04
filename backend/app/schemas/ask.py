@@ -22,6 +22,7 @@ class Citation(BaseModel):
     sheet_name: Optional[str] = None
     row_start: Optional[int] = None
     row_end: Optional[int] = None
+    snippet: Optional[str] = None     # start of the cited passage, for the source card
 
 
 class AskResponse(BaseModel):

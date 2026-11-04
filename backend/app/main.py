@@ -7,6 +7,7 @@ from app.routers.document import router as document_router
 from app.routers.retrieve import router as retrieve_router
 from app.routers.ask import router as ask_router
 from app.routers.memory import router as memory_router
+from app.routers.conversations import router as conversations_router
 from app.db.database import engine
 from app.memory.store import close_memory_store
 
@@ -46,3 +47,4 @@ app.include_router(document_router)
 app.include_router(retrieve_router)
 app.include_router(ask_router)
 app.include_router(memory_router)
+app.include_router(conversations_router)

@@ -14,6 +14,7 @@ class Citation:
     sheet_name: str | None = None      # spreadsheets: which sheet...
     row_start: int | None = None       # ...and which rows the chunk covers
     row_end: int | None = None
+    snippet: str | None = None         # the start of the cited passage, so a source card can show it
 
 
 @dataclass

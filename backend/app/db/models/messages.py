@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -31,6 +32,14 @@ class Message(Base):
     content: Mapped[str] = mapped_column(
         Text,
         nullable=False,
+    )
+
+    # Sources an assistant answer cited: a list of citation objects (marker, document_id,
+    # source_name, page_number, ..., snippet). NULL for user messages and for answers
+    # saved before citations were stored.
+    citations: Mapped[list | None] = mapped_column(
+        JSONB,
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
