@@ -8,9 +8,11 @@ scores is caused by retrieval (that is what makes it an "ablation"):
 
   dense                  dense vectors only (semantic similarity)
   hybrid                 dense + BM25 keywords, fused by Qdrant (reciprocal rank fusion)
-  hybrid+rerank          hybrid, then a cross-encoder re-scores the top 15 candidates (what the production /ask endpoint does)
+  hybrid+rerank          hybrid, then a cross-encoder re-scores the top 15 candidates (no LLM in retrieval)
 
 Everything after retrieval (prompt, LLM, citations, refusal logic) is identical for all three.
+(The production /ask endpoint also asks the LLM for extra phrasings of the question before searching;
+the evaluation leaves that out so retrieval is measured on its own.)
 """
 
 import time

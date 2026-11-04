@@ -2,6 +2,7 @@
 
 import logging
 import re
+from collections.abc import Iterator
 from functools import lru_cache
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
@@ -191,16 +192,92 @@ def no_answer() -> GenerationResult:
     return GenerationResult(answer=NO_ANSWER, citations=[], abstained=True)
 
 
+def _trace_summary(events: list) -> dict:
+    """What LangSmith shows as this step's output: the FINAL result, not thousands of token events."""
+    for kind, value in reversed(events):
+        if kind == "final":
+            return {"answer": value.answer, "abstained": value.abstained, "citations": [c.marker for c in value.citations]}
+    return {}
+
+
 @traceable(
     name="generate_answer",
     process_inputs=lambda i: {
         "question": i["question"], "num_chunks": len(i["chunks"]), "history_messages": len(i.get("history") or []),
         "has_summary": bool(i.get("summary")), "num_memories": len(i.get("memories") or []),
     },
-    process_outputs=lambda r: {
-        "answer": r.answer, "abstained": r.abstained, "citations": [c.marker for c in r.citations],
-    },
+    reduce_fn=_trace_summary,
 )
+def stream_answer(
+    question: str,
+    llm,
+    chunks: list[ScoredChunk],
+    history: list[tuple[str, str]] | None = None,
+    summary: str = "",
+    memories: list[str] | None = None,
+) -> Iterator[tuple[str, object]]:
+    """
+    The answer, piece by piece. Yields ("token", text) for every piece the model produces,
+    then exactly one ("final", GenerationResult).
+
+    The final result is the one to trust: refusal detection and the citation filter need the
+    COMPLETE text, so they run at the end. If the model refuses or answers nothing, the tokens
+    already streamed are only a preview and the final answer replaces them.
+
+    If there is nothing to answer from, the LLM is not called at all (it could only guess).
+    `history` is the recent conversation; `summary` covers the older part;
+    `memories` are long-term facts about the user from earlier conversations.
+    Both are background only: the answer still comes from the retrieved context.
+    """
+    if not chunks:
+        yield from _refusal_events()
+        return
+
+    augmented = get_context_builder().build(chunks)
+    if augmented.chunks_used == 0:
+        logger.warning("All %d retrieved chunks are bigger than the context budget", len(chunks))
+        yield from _refusal_events()
+        return
+
+    chain = build_generation_chain(llm)
+    pieces = []
+    for piece in chain.stream(
+        {
+            "context": augmented.prompt_context,
+            "question": question,
+            "history": to_chat_messages(history or []),
+            "summary_block": summary_block(summary),
+            "memory_block": memory_block(memories or []),
+        }
+    ):
+        if piece:
+            pieces.append(piece)
+            yield "token", piece
+
+    answer = "".join(pieces)
+
+    if not answer.strip():
+        logger.warning("The model returned an empty answer")
+        yield from _refusal_events()
+        return
+
+    if is_refusal(answer):
+        yield "final", GenerationResult(answer=answer, citations=[], abstained=True)
+        return
+
+    yield "final", GenerationResult(
+        answer=answer,
+        citations=only_cited(augmented.citations, answer),
+        abstained=False,
+    )
+
+
+def _refusal_events() -> Iterator[tuple[str, object]]:
+    result = no_answer()
+    yield "token", result.answer
+    yield "final", result
+
+
 def generate_answer(
     question: str,
     llm,
@@ -210,42 +287,11 @@ def generate_answer(
     memories: list[str] | None = None,
 ) -> GenerationResult:
     """
-    Builds the cited context from the retrieved chunks and asks the LLM to
-    answer ONLY from it. If there is nothing to answer from, the LLM is not
-    called at all (it could only guess).
-
-    `history` is the recent conversation; `summary` covers the older part;
-    `memories` are long-term facts about the user from earlier conversations.
-    Both are background only: the answer still comes from the retrieved context.
+    The whole answer at once: runs stream_answer and returns its final result.
+    Used where nobody needs the text as it is produced (the JSON /ask endpoint, the evaluation).
     """
-    if not chunks:
-        return no_answer()
-
-    augmented = get_context_builder().build(chunks)
-    if augmented.chunks_used == 0:
-        logger.warning("All %d retrieved chunks are bigger than the context budget", len(chunks))
-        return no_answer()
-
-    chain = build_generation_chain(llm)
-    answer = chain.invoke(
-        {
-            "context": augmented.prompt_context,
-            "question": question,
-            "history": to_chat_messages(history or []),
-            "summary_block": summary_block(summary),
-            "memory_block": memory_block(memories or []),
-        }
-    )
-
-    if not answer.strip():
-        logger.warning("The model returned an empty answer")
-        return no_answer()
-
-    if is_refusal(answer):
-        return GenerationResult(answer=answer, citations=[], abstained=True)
-
-    return GenerationResult(
-        answer=answer,
-        citations=only_cited(augmented.citations, answer),
-        abstained=False,
-    )
+    result = None
+    for kind, value in stream_answer(question, llm, chunks, history, summary, memories):
+        if kind == "final":
+            result = value
+    return result

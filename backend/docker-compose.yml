@@ -42,6 +42,19 @@ services:
       timeout: 5s
       retries: 5
 
+  # One-shot job: brings the database schema up to date, then exits. The API and worker wait for it,
+  # so a fresh volume (or a new migration after `git pull`) never leaves them running against old tables.
+  migrate:
+    build: .
+    command: alembic upgrade head
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-knowledgeos}:${POSTGRES_PASSWORD:-knowledgeos}@postgres:5432/${POSTGRES_DB:-knowledgeos}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build: .
     ports:
@@ -59,6 +72,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - fastembed_cache:/app/.fastembed_cache
 
@@ -78,6 +93,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - fastembed_cache:/app/.fastembed_cache
 

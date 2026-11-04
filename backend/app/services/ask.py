@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Iterator
 from dataclasses import asdict
 
 from fastapi import HTTPException
@@ -12,6 +13,7 @@ from app.generation.orchestrator import (
     RECENT_KEEP_TOKENS,
     count_tokens,
     generate_answer,
+    stream_answer,
     trim_history,
 )
 from app.generation.summary import format_messages, split_for_summary, summarize
@@ -122,19 +124,16 @@ def _remember_important_facts(user_id: int, conversation: Conversation, llm) -> 
         logger.warning("Could not update long-term memory for user %s", user_id, exc_info=True)
 
 
-@traceable(
-    name="ask",
-    process_inputs=lambda i: {"question": i["request"].query, "conversation_id": i["request"].conversation_id},
-    process_outputs=lambda r: {
-        "answer": r.answer, "abstained": r.abstained, "citations": len(r.citations),
-        "conversation_id": r.conversation_id,
-    },
-)
-def ask_question(db: Session, user_id: int, request: AskRequest, llm) -> AskResponse:
+def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[tuple[str, object]]:
     """
-    retrieve -> build cited context -> generate answer -> save the turn.
+    retrieve -> build cited context -> generate answer -> save the turn, as a stream of events:
 
-    Nothing is saved if retrieval or the LLM fails, so the client can simply retry.
+        ("token", "text piece") ...   the answer as the model writes it
+        ("done", AskResponse)         once, after the turn is saved (the answer in it is the one to trust)
+
+    Nothing is saved if retrieval or the LLM fails, so the client can simply retry. Problems are
+    raised as before: LookupError (unknown conversation), HTTPException 429 / 502. Before the first
+    token they can still become a normal HTTP error; after it the caller reports them in the stream.
     """
     conversation = None
     summary = ""
@@ -153,8 +152,13 @@ def ask_question(db: Session, user_id: int, request: AskRequest, llm) -> AskResp
         history=_history_as_text(summary, history, memories),
     )
 
+    generation = None
     try:
-        generation = generate_answer(request.query, llm, retrieval.chunks, history, summary, memories)
+        for kind, value in stream_answer(request.query, llm, retrieval.chunks, history, summary, memories):
+            if kind == "token":
+                yield "token", value
+            else:
+                generation = value
     except Exception as error:
         logger.exception("LLM call failed")
         if looks_like_quota_error(error):
@@ -183,9 +187,26 @@ def ask_question(db: Session, user_id: int, request: AskRequest, llm) -> AskResp
         abstained=generation.abstained,
         created_at=assistant_message.created_at,
     )
+    yield "done", response
 
-    # The answer is already saved, so a problem here must never fail the request.
+    # The answer is already saved and sent, so a problem here must never fail the request.
+    # (If the client hung up after "done", this is skipped and tried again after the next question.)
     if _summarize_if_needed(db, conversation, llm):
         _remember_important_facts(user_id, conversation, llm)
 
+
+@traceable(
+    name="ask",
+    process_inputs=lambda i: {"question": i["request"].query, "conversation_id": i["request"].conversation_id},
+    process_outputs=lambda r: {
+        "answer": r.answer, "abstained": r.abstained, "citations": len(r.citations),
+        "conversation_id": r.conversation_id,
+    },
+)
+def ask_question(db: Session, user_id: int, request: AskRequest, llm) -> AskResponse:
+    """The whole turn at once (the JSON /ask endpoint): runs ask_stream and returns its final response."""
+    response = None
+    for kind, value in ask_stream(db, user_id, request, llm):
+        if kind == "done":
+            response = value
     return response

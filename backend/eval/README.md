@@ -52,7 +52,7 @@ An ablation switches one component at a time to see what it is worth.
 |---|---|
 | `dense` | embedding similarity only |
 | `hybrid` | dense + BM25 keyword search, merged by Qdrant (reciprocal rank fusion) |
-| `hybrid+rerank` | hybrid candidates (15) re-scored by a cross-encoder, best 5 kept (the production `/ask` behaviour) |
+| `hybrid+rerank` | hybrid candidates (15) re-scored by a cross-encoder, best 5 kept (no LLM in retrieval) |
 
 ### The golden set (`golden_set.jsonl`)
 
@@ -113,6 +113,21 @@ How to read them together:
 * **Another LLM:** `--generator gemini` or `--judge gemini` (watch the free-tier request limit).
 * **See inside one question:** `--trace` sends traces to LangSmith; open a run to see the prompt, the retrieved chunks and their scores.
 * **Regression check:** run before and after a change and compare `results/<run>/summary.json`.
+
+## Experiment log
+
+**Paraphrase questions and LLM query expansion (2026-11-05).** `/ask` asks the LLM for extra phrasings of the question before searching, but the three configurations above do not (retrieval is measured on its own). To see whether that closes the paraphrase gap (Hit@5 0.50) a fourth configuration was tried on all 45 questions and then removed:
+
+| metric | hybrid+rerank | + LLM query expansion |
+|---|---|---|
+| Hit@5 | 0.93 | 0.93 |
+| MRR | 0.85 | 0.84 |
+| Answers correct | 0.93 | 0.93 |
+| False refusals | 0.05 | 0.07 |
+| Paraphrase Hit@5 (6 questions) | 0.50 | 0.50 |
+| Retrieval latency p50 | 2.9 s | 9.9 s |
+
+No gain, 3.4 times the retrieval time. Different questions fail in each: expansion finds passages the plain query misses (q35, q39) but for q34, q37 and q38 the needed chunk is in the 30-candidate pool (rank 6 to 10) and the cross-encoder drops it out of the top 5. So the bottleneck is reranking/fusion, not recall. The paraphrase prompt itself is not the slow part. Lesson: a small local model copies any example sentence in a prompt (it pasted one into 4 of 6 variants), so prompts here give vocabulary examples only. Ideas not yet tried: rerank against every variant, fuse variant rankings before reranking, smaller chunks, a stronger embedder.
 
 ## Compatibility note
 

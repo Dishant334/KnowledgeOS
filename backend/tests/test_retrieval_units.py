@@ -15,6 +15,7 @@ from app.generation.orchestrator import NO_ANSWER, generate_answer
 from app.retrieval.filters import build_qdrant_filter
 from app.retrieval.merge import merge_and_truncate
 from app.retrieval.model import ScoredChunk
+from app.retrieval.multi_query import clean_variant, generate_query_variants
 from app.retrieval.orchestrator import make_query_variants, rewrite_question
 from tests.conftest import make_fake_llm
 
@@ -176,3 +177,41 @@ def test_reranker_model_is_loaded_once(monkeypatch):
     assert first is second
     assert len(loaded) == 1
     assert loaded[0][0] == "some-model"
+
+
+# --- query paraphrases: parsing what a small local model returns -------------------------------
+
+
+@pytest.mark.parametrize("line, expected", [
+    ("1. annual leave entitlement", "annual leave entitlement"),
+    ("2) annual leave entitlement", "annual leave entitlement"),
+    ("- annual leave entitlement", "annual leave entitlement"),
+    ("* annual leave entitlement", "annual leave entitlement"),
+    ('"annual leave entitlement"', "annual leave entitlement"),
+    ("  annual leave entitlement  ", "annual leave entitlement"),
+])
+def test_clean_variant_strips_list_markers_and_quotes(line, expected):
+    assert clean_variant(line) == expected
+
+
+def test_generate_query_variants_cleans_output_and_drops_chatty_lines():
+    class Chain:
+        def invoke(self, inputs):
+            return "Here are 3 variants:\n1. annual leave entitlement\n\n- \"paid time off policy\"\nEmployees receive paid leave each year."
+
+    variants = generate_query_variants(Chain(), "how much time off", num_variants=3)
+
+    assert variants == [
+        "how much time off",                       # the original query always comes first
+        "annual leave entitlement",
+        "paid time off policy",
+        "Employees receive paid leave each year.",
+    ]
+
+
+def test_generate_query_variants_keeps_at_most_num_variants():
+    class Chain:
+        def invoke(self, inputs):
+            return "a\nb\nc\nd\ne"
+
+    assert generate_query_variants(Chain(), "q", num_variants=2) == ["q", "a", "b"]

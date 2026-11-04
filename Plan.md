@@ -4,9 +4,13 @@ A backend-first build order: get the RAG engine correct and *measured* before to
 
 **Target: \~12 weeks part-time, \~7–8 weeks full-time.**
 
+**Legend:** ✅ done and tested · 🟡 partly done · ⏳ not started. Status last reviewed 2026-11-05 against the code (441 tests passing).
+
 ---
 
 ## Phase 0 — Architecture & Planning (2–3 days)
+
+> **Status: ✅ done** (decisions made and built). ⏳ Still open: a README with the architecture diagram (`Architecture.png` exists at the repo root) and a `/docs` schema doc. The evaluation code lives in `backend/eval/` rather than a top-level `/eval`.
 
 **Goal:** Lock every major decision on paper so you're not re-architecting mid-build.
 
@@ -51,6 +55,8 @@ A backend-first build order: get the RAG engine correct and *measured* before to
 
 ## Phase 1 — FastAPI Backend Foundation (3–4 days)
 
+> **Status: ✅ done.** Clerk JWT verification, `get_current_user`, `/auth/me`, user-isolated `/documents`, working `/retrieve` and `/ask`, Alembic migrations. Tested with mocked JWKS/svix and an isolated Postgres test DB. ⏳ A real Clerk browser login has not been verified by hand.
+
 **Goal:** Backend-only skeleton with the real route surface, Clerk authentication, PostgreSQL persistence, and no RAG business logic yet.
 
 ```text
@@ -82,36 +88,28 @@ FastAPI
 ---
 
 
-## Phase 2 — Document Ingestion (1–2 weeks)
+## Phase 2 — Document Ingestion 🟡
 
-**Goal:** Reliable, LangChain-driven ingestion for messy real-world files.
-
-```
-Upload → Parser → Cleaning → Chunking → Metadata → Embedding → Qdrant
+**Goal:** Reliable ingestion for messy real-world files.
 
 ```
+Upload → Postgres bytes → Celery worker → load / OCR → clean → chunk → bge-large + BM25 → Qdrant
+```
 
-- Support PDF, DOCX, TXT, Markdown, URLs.
-- **LangChain document loaders** as the standard interface so every source type returns a consistent `Document` object: 
-  - PDF: `PyMuPDFLoader`/`UnstructuredPDFLoader` (OCR fallback via `pytesseract` for scanned pages)
-  - DOCX: `Docx2txtLoader`/`UnstructuredWordDocumentLoader`
-  - TXT/Markdown: `TextLoader`/`UnstructuredMarkdownLoader`
-  - URL: `WebBaseLoader` (or a `trafilatura`-backed custom loader for cleaner extraction)
-- Cleaning: strip boilerplate, headers/footers, de-hyphenate line breaks, normalize whitespace as post-load `Document` transforms.
-- **LangChain text splitters** for chunking — not naive fixed-size: 
-  - `RecursiveCharacterTextSplitter` (token-aware via `tiktoken` length function) as baseline
-  - `MarkdownHeaderTextSplitter`/section-aware splitting for structured policy docs
-  - Metadata (`doc_id, uploaded_by, page_number, section_title, chunk_index`) carried through automatically into each chunk
-- Content hashing for duplicate detection — re-uploading the same file shouldn't re-embed it.
-- Document status lifecycle (`pending → processing → embedded → failed`), processed as background jobs so uploads don't block the request.
+**Built (✅):**
+- Formats: PDF (OCR fallback with Tesseract), DOCX, TXT, Markdown, HTML, CSV, XLSX, PPTX.
+- Cleaning: boilerplate, headers/footers, de-hyphenation, whitespace.
+- Chunking: plain recursive 512-token splitter for prose; separate strategies for slides, tables (spreadsheet chunks never span two sheets) and HTML (`section_title`). **Parent/child chunking was tried and removed** — expanded chunks overflowed the 3000-token prompt budget.
+- Per-user content-hash dedup (re-uploading the same file is a no-op), Celery background jobs with retries, advisory-lock duplicate control, per-document vector deletion.
+- Status lifecycle: `pending → processing → ready | failed` (back to `pending` while retrying).
 
-**Deliverable:** Upload a batch of 20 mixed PDFs/DOCX/URLs, watch status transition async, confirm duplicate re-upload is a no-op.
-
-**Resume line:** *"Built a fault-tolerant, async ingestion pipeline using LangChain document loaders and text splitters across PDF/DOCX/Markdown/URL sources, with content-hash deduplication and structure-aware chunking."*
+**Still pending:** nothing important. URL ingestion is out of scope.
 
 ---
 
 ## Phase 3 — Embeddings + Qdrant (3–5 days)
+
+> **Status: ✅ done.** Local `bge-large-en-v1.5` dense vectors + BM25 sparse vectors in Qdrant, payload indexes, batched embedding with retries, per-user filtered search. The ingestion folder script is `backend/eval/ingest.py` (reports documents and chunks indexed).
 
 **Goal:** Understand and implement the vector layer solidly — this is foundational, not a library call to skim past.
 
@@ -134,95 +132,121 @@ No frontend, no deployment concerns yet — purely get retrieval quality right i
 
 ---
 
-## Phase 4 — Advanced RAG (1–2 weeks)
+## Phase 4 — Advanced RAG 🟡
 
-**Goal:** The most important phase — this is what separates the project from a tutorial RAG app.
-
-```
-User Query
-    ↓
-Query Rewriting
-    ↓
-Multi Query
-    ↓
-   ┌── BM25
-   │
-   └── Vector Search
-         ↓
-    Hybrid Fusion
-         ↓
-      Reranker
-         ↓
-    Top Documents
+**Goal:** Retrieval that finds the right chunk, not just similar text.
 
 ```
+Query → rewrite + paraphrases → dense + BM25 (Qdrant RRF) → merge → cross-encoder rerank → top 5
+```
 
-- **Query rewriting**: an LCEL chain (`prompt | llm | StrOutputParser`) rewrites ambiguous/conversational queries into standalone search queries — handles follow-ups like "what about the 2023 version?"
-- **Multi-query retrieval**: LangChain's `MultiQueryRetriever` generates 3–5 paraphrased queries via LLM, retrieves for each, dedupes/merges results automatically.
-- **BM25**: LangChain's `BM25Retriever` (backed by `rank_bm25`) over the same corpus.
-- **Vector search**: the Qdrant retriever from Phase 3.
-- **Hybrid fusion**: LangChain's `EnsembleRetriever` combines BM25 + dense retrieval with Reciprocal Rank Fusion (RRF), configurable per-retriever weights.
-- **Reranker**: `ContextualCompressionRetriever` wrapping a `CrossEncoderReranker` (`bge-reranker` locally, or `CohereRerank` as a drop-in) on top of the ensemble output — be ready to explain the bi-encoder recall vs. cross-encoder precision tradeoff.
-- **Metadata filtering**: optional user-specified filters (date range, doc type, department, uploader) passed as `search_kwargs={"filter": ...}`.
-- Compose the entire thing as one retriever chain: `rewrite → multi-query → ensemble(BM25+dense) → rerank`, exposed via `/retrieve` as a single LCEL pipeline, not scattered function calls.
+**Built (✅):** implemented as our own code, not the LangChain `Ensemble` / `MultiQuery` / `ContextualCompression` classes.
+- LLM query rewrite and paraphrases, hybrid dense + BM25 search with RRF fusion inside Qdrant, cached cross-encoder rerank (`bge-reranker-base`), always filtered to the current user. Models load lazily.
+- `/retrieve` is live and traced in LangSmith.
+- Measured: hybrid lifts Hit@5 from 0.74 to 0.93; the reranker lifts MRR from 0.78 to 0.85 (see Phase 6).
 
-**Deliverable:** `/retrieve` endpoint returns ranked chunks with per-stage scores visible (BM25 score, dense score, fused score, rerank score) for debugging and for your eval work in Phase 6.
-
-**Resume line:** *"Built a hybrid retrieval chain in LangChain — EnsembleRetriever fusing BM25 and Qdrant dense search via RRF, LLM-based query rewriting, MultiQueryRetriever expansion, and a ContextualCompressionRetriever wrapping a cross-encoder reranker — as the core intelligence layer of the platform."*
+**Paraphrase questions:** Hit@5 0.50 in every configuration. I tried the real `/ask` path (LLM query expansion) on all 45 questions: no gain (Hit@5 0.93 → 0.93, paraphrase 0.50 → 0.50) and retrieval got 3.4× slower (2.9 s → 9.9 s p50). It finds some passages the plain query misses, but the cross-encoder then drops others out of the top 5, so the weak link is rerank/fusion. That 4th evaluation configuration was removed; details are in `backend/eval/README.md` (Experiment log). ⏳ Ideas if revisited: rerank against every variant, fuse variant ranks before reranking, smaller chunks, a stronger embedder (the last two need re-ingesting).
 
 ---
 
-## Phase 5 — Generation (4–5 days)
+## Phase 5 — Generation ✅
 
-**Goal:** Turn retrieved context into trustworthy, cited, streamed answers.
-
-```
-Retriever → Context Builder → Prompt → LLM → Answer
+**Goal:** Cited, grounded answers that say "I don't know" when the documents don't cover it.
 
 ```
+Retrieved chunks → context builder → prompt → LLM → answer + citations
+```
 
-- Context builder: assemble top reranked chunks into a token-budgeted prompt (truncate/prioritize by score, dedupe overlapping chunks) as an LCEL `RunnableLambda` step.
-- Prompt template (`ChatPromptTemplate`) enforcing: answer only from retrieved context, cite sources inline (`[1]`, `[2]`), explicitly say "I don't know" when context is insufficient — test deliberately with out-of-scope questions.
-- Full chain composed via LCEL: `retriever_chain → context_builder → prompt → llm → StrOutputParser`.
-- Citation mapping: map `[1]` back to `(doc_id, page, section)` from `Document.metadata`, returned as structured metadata for the frontend to render as clickable source cards.
-- Streaming via `.astream()`/`.stream()` on the LCEL chain, piped through SSE or WebSocket.
-- Conversation memory: `RunnableWithMessageHistory` backed by a custom `BaseChatMessageHistory` reading/writing Postgres; condensed history feeds back into the Phase 4 query-rewrite step for follow-ups.
+**Built (✅):**
+- Context builder with a 3000-token budget; it reports which chunks really reached the prompt.
+- Grounded prompt (document text is treated as untrusted), `[1]`-style citations mapped to document / page / section, refusal detection, and `/ask` returns only the sources the answer cites.
+- Memory: old messages are never dropped; past 1500 tokens they fold into a rolling summary on `conversations.summary`. Long-term per-user facts live in Postgres via LangGraph `PostgresStore`, managed with `/memory` endpoints.
+- LLM layer: local Qwen3 8B (Ollama) first, Gemini on error or quota. No provider working gives 503; quota gives 429.
 
-At this point you have a **fully working RAG backend** — before Docker, before CI/CD, before frontend.
+**Streaming (✅):** `POST /ask/stream` sends the answer as Server-Sent Events (`token`, `done`, `error`) while the model writes it; `POST /ask` still returns the whole answer as JSON. Both run the same code (`stream_answer` / `ask_stream`).
 
-**Deliverable:** `curl` a question at `/ask`, get a streamed, cited, grounded answer; ask an out-of-scope question, get an honest "I don't know."
-
-**Resume line:** *"Implemented citation-backed streaming generation as a composed LCEL chain with strict grounding and RunnableWithMessageHistory-managed conversation memory — model abstains when retrieved context is insufficient."*
+**Deferred until the frontend exists:** saving citations with messages, and an endpoint that shows conversation summaries.
 
 ---
 
-## Phase 6 — Evaluation (1 week) — *do this before the frontend*
+## Phase 6 — Evaluation 🟡
 
-**Goal:** Prove the system works with numbers. This is what turns "I made a RAG chatbot" into "I engineered and evaluated a retrieval system" — the single biggest differentiator on your resume.
+**Goal:** Prove the system works with numbers.
 
-- Build a **golden eval set**: 50–100 question/answer pairs with known-correct source chunks, spanning easy/hard/out-of-scope questions, against your own ingested docs.
-- Integrate **RAGAS** to compute: 
-  - **Retrieval Precision\@K / Recall\@K**
-  - **Context Precision / Context Recall**
-  - **Faithfulness** (is the answer actually grounded, catches hallucination)
-  - **Answer Relevance**
-- Also track: **latency** (retrieval / rerank / generation, p50/p95), **token usage**, **cost per query**.
-- Run the eval across three configurations and compare: 
-  - Dense only
-  - Dense + BM25
-  - Dense + BM25 + Reranker
-- Wire **LangSmith** to trace every query end-to-end (retrieved chunks, scores, prompt, tokens, latency) — makes the eval story concrete and debuggable.
-- Output a results table/report you can drop straight into your README and your interview answers.
+**Built (✅):** harness in `backend/eval/` — 45-question golden set over 13 synthetic documents (5 formats), exact metrics (Hit/Recall/Precision@5, MRR, answer correctness, citations, refusals), RAGAS 0.4.3 (faithfulness, answer relevancy, context precision, context recall) with a local Qwen judge, a three-configuration comparison, p50/p95 latency and token counts, and LangSmith tracing (verified live).
 
-**Deliverable:**
+**Results** (measured 2026-11-04; 45 questions, 121 chunks; generator and judge both local Qwen3 8B; RAGAS on a fixed subset of 20 questions; full report `backend/eval/results/latest.md`):
 
-| Config Retrieval Precision\@5 Recall\@5 Faithfulness Answer Relevance p95 Latency  |      |      |      |      |      |
-| ---------------------------------------------------------------------------------- | ---- | ---- | ---- | ---- | ---- |
-| Dense only                                                                         | 0.61 | 0.58 | 0.79 | 0.83 | 1.2s |
-| + BM25 hybrid                                                                      | 0.71 | 0.68 | 0.84 | 0.86 | 1.4s |
-| + Reranker                                                                         | 0.84 | 0.79 | 0.91 | 0.90 | 1.9s |
+| Metric | Dense only | + BM25 hybrid | + Reranker |
+|---|---|---|---|
+| Hit@5 (needed passage found) | 0.74 | 0.93 | 0.93 |
+| Recall@5 | 0.75 | 0.93 | 0.93 |
+| Precision@5 (ceiling 0.20) | 0.16 | 0.21 | 0.20 |
+| MRR (right chunk near the top) | 0.55 | 0.78 | 0.85 |
+| Answers correct | 0.74 | 0.93 | 0.93 |
+| False refusals | 0.24 | 0.07 | 0.05 |
+| Cites an expected document | 0.74 | 0.90 | 0.93 |
+| Out-of-scope refused | 1.00 | 1.00 | 1.00 |
+| RAGAS faithfulness | 0.80 | 0.75 | 0.82 |
+| RAGAS answer relevancy | 0.63 | 0.74 | 0.73 |
+| RAGAS context precision | 0.52 | 0.69 | 0.74 |
+| RAGAS context recall | 0.70 | 0.85 | 0.85 |
+| Retrieval latency p50 (ms)* | 203 | 310 | 2917 |
+| Generation latency p50 / p95 (s)* | 5.1 / 8.3 | 7.2 / 12.4 | 6.5 / 9.6 |
 
-**Resume line:** *"Built a RAGAS-based evaluation pipeline (retrieval precision/recall, faithfulness, answer relevance, latency, cost) traced via LangSmith, and used it to justify hybrid retrieval + reranking with data — improving faithfulness from 0.79 to 0.91."*
+\*Measured on a busy laptop, so rough; idle, retrieval with rerank takes about 0.2 s and a local answer 1–4 s. Cost per query is 0.
+
+Hit@5 by question type (dense / hybrid / hybrid+rerank): direct 0.79 / 1.00 / 1.00 · multi-document 0.33 / 1.00 / 1.00 · distractor 1.00 / 1.00 / 1.00 · paraphrase 0.50 / 0.50 / 0.50.
+
+**What it shows:** hybrid search fixes multi-document questions and cuts false refusals from 0.24 to 0.07. The reranker improves ordering (MRR, context precision) but finds nothing new. No setup solves paraphrase questions. Faithfulness differences are within judge noise. Caveat: the judge is the same model that wrote the answers, so compare columns rather than trusting absolute RAGAS values; the exact metrics cannot be fooled. The corpus is small and synthetic.
+
+**Still pending (⏳):** grow the golden set from 45 to 50–100 questions, ideally with real documents.
+
+**Resume line:** *"Built a RAGAS and exact-metric evaluation harness traced via LangSmith; it showed hybrid search raising Hit@5 from 0.74 to 0.93 and reranking raising MRR from 0.78 to 0.85 on a 45-question golden set, and surfaced a paraphrase-query weakness to fix next."*
+
+---
+
+## Phase 6 addendum — How the evaluation pipeline works
+
+Code: `backend/eval/` (full guide: `backend/eval/README.md`). It runs the **real** ingestion, retrieval and generation code, so the numbers describe the actual product.
+
+```
+golden_set.jsonl + corpus.py  →  ingest.py  →  pipelines.py  →  metrics.py (exact)  ┐
+ (questions + known answers)     (own Qdrant     (3 retrieval    ragas_scoring.py     ├→ report.py → report.md
+                                  collection)     configs)        (LLM judge)         ┘
+```
+
+**Setup and run** (from `backend/`):
+
+```bash
+docker compose up -d qdrant                    # the eval needs Qdrant, not Postgres/Redis
+ollama pull qwen3:8b                           # generator and judge (local, free)
+pip install -r requirements-eval.txt           # requirements.txt + ragas==0.4.3
+OLLAMA_NUM_PARALLEL=4 ollama serve             # RAGAS makes ~11 judge calls per answer
+python -m eval.run                             # full run, about an hour
+python -m eval.run --limit 8 --no-ragas        # smoke test, a few minutes
+python -m eval.run --ragas-sample 20           # RAGAS on 20 questions only (same ones per config)
+python -m eval.run --reuse eval/results/<run>  # reload finished stages instead of redoing them
+pytest -q tests/test_eval_harness.py           # harness tests (29)
+```
+
+Useful flags: `--configs`, `--types`, `--limit`, `--skip-ingest`, `--generator/--judge ollama|gemini`, `--trace` (LangSmith, off by default).
+
+**What each file does**
+
+| File | Role |
+|---|---|
+| `run.py` | Conductor: parses flags, forces the separate collection `knowledgeos_eval` and tracing off, runs the stages, caches each stage to JSON (`--reuse`), writes the report. |
+| `corpus.py` | Builds 13 synthetic documents in 5 formats with deliberate traps (Europe vs US travel policy, answers split across documents). Deterministic. |
+| `golden_set.jsonl` | 45 questions: `question`, `reference` answer, `expected` (document + exact answering sentence), `answer_regex`, `type` (direct, paraphrase, distractor, multi, out_of_scope). |
+| `ingest.py` | Pushes the corpus through the production `ingest_file()` into the eval collection under fake user 424242. Refuses to run against the real `documents` collection. |
+| `pipelines.py` | For every question and every config (`dense`, `hybrid`, `hybrid+rerank`): retrieve top 5, call the real `generate_answer()`, time both, count tokens, record which chunks actually fit the prompt. Only retrieval differs between configs. |
+| `metrics.py` | Exact, no-LLM metrics by string matching: Hit/Recall/Precision@5, MRR, answer correctness, false refusals, citation hit and precision, out-of-scope refusal. |
+| `ragas_scoring.py` | RAGAS with the local judge: faithfulness (supported claims ÷ claims), answer relevancy (questions regenerated from the answer vs the real question), context precision (useful chunks ranked high), context recall (reference sentences found in the contexts). A failed judge call becomes NaN, not a crash. |
+| `compat.py` | Stand-ins for two Vertex classes RAGAS 0.4.3 imports but `langchain-community` no longer has. Delete when RAGAS fixes it. |
+| `report.py` | Builds the tables, the Hit@5-by-question-type table and the list of still-failing questions. |
+
+**Honest caveats:** the judge is a small local model that also wrote the answers (self-preference, noise), so compare columns, don't trust absolute RAGAS values; the exact metrics cannot be fooled. The corpus is small and synthetic. RAGAS runs on 20 of the 42 answerable questions because local judging is slow.
 
 ---
 
@@ -244,19 +268,18 @@ At this point you have a **fully working RAG backend** — before Docker, before
 
 ---
 
-## Phase 8 — Docker (3–4 days)
+## Phase 8 — Docker 🟡
 
-**Goal:** Containerize only once every service's behavior is already understood — you're encoding known-good behavior, not debugging blind inside a container.
+**Goal:** Containerize the stack once its behaviour is understood.
 
-- Containerize: FastAPI, PostgreSQL, Redis, Qdrant.
-- `Dockerfile` (multi-stage build for the FastAPI image), `docker-compose.yml`, `.env.example`.
-- `docker compose up` brings up the full backend stack cleanly from a fresh clone.
-- Health checks per service in the compose file.
-- `docker-compose.prod.yml` variant for later deployment (leaner image, no dev volumes/reload).
-- 'Test ingestion pipeling and embedding stuff'
-**Deliverable:** Fresh clone → `docker compose up` → full backend healthy and answering `/ask` within minutes, no manual setup steps.
+**Built (✅):** `backend/Dockerfile` and `backend/docker-compose.yml` (Postgres on host port 5433, Qdrant, Redis).
 
-**Resume line:** *"Containerized the full backend stack (FastAPI, Postgres, Redis, Qdrant) with multi-stage Docker builds and compose-based orchestration for reproducible local and production environments."*
+**Also built (✅):** a one-shot `migrate` service runs `alembic upgrade head` before the API and worker start, so a fresh volume or a new migration never leaves the containers on an old schema.
+
+**Still pending (⏳):**
+- Health checks for the API and worker.
+- `docker-compose.prod.yml`.
+- Prove `docker compose up` works from a fresh clone. Inside containers `OLLAMA_BASE_URL` must be `http://host.docker.internal:11434`.
 
 ---
 
@@ -328,20 +351,20 @@ Qdrant / Postgres / Redis → Cloud
 
 ## Build Order Summary
 
-| Phase Focus Time  |                                |           |
-| ----------------- | ------------------------------ | --------- |
-| 0                 | Architecture & planning        | 2–3 days  |
-| 1                 | FastAPI backend foundation     | 3–4 days  |
-| 2                 | Document ingestion             | 1–2 weeks |
-| 3                 | Embeddings + Qdrant            | 3–5 days  |
-| 4                 | Advanced RAG (hybrid + rerank) | 1–2 weeks |
-| 5                 | Generation                     | 4–5 days  |
-| 6                 | Evaluation                     | 1 week    |
-| 7                 | Production hardening           | 4–5 days  |
-| 8                 | Docker                         | 3–4 days  |
-| 9                 | CI/CD                          | 2–3 days  |
-| 10                | React frontend                 | 1–2 weeks |
-| 11                | Deployment & polish            | 3–5 days  |
+| Phase | Focus | Time | Status |
+|---|---|---|---|
+| 0 | Architecture & planning | 2–3 days | ✅ (README/docs ⏳) |
+| 1 | FastAPI backend foundation | 3–4 days | ✅ |
+| 2 | Document ingestion | 1–2 weeks | 🟡 (URLs, Markdown headers ⏳) |
+| 3 | Embeddings + Qdrant | 3–5 days | ✅ |
+| 4 | Advanced RAG (hybrid + rerank) | 1–2 weeks | 🟡 (paraphrase quality ⏳) |
+| 5 | Generation | 4–5 days | ✅ |
+| 6 | Evaluation | 1 week | 🟡 (harness ✅, bigger golden set ⏳) |
+| 7 | Production hardening | 4–5 days | ⏳ |
+| 8 | Docker | 3–4 days | 🟡 (health checks, prod compose ⏳) |
+| 9 | CI/CD | 2–3 days | ⏳ |
+| 10 | React frontend | 1–2 weeks | ⏳ |
+| 11 | Deployment & polish | 3–5 days | ⏳ |
 
 **Total: \~10–12 weeks part-time, \~7–8 weeks full-time.**
 
@@ -349,7 +372,7 @@ Qdrant / Postgres / Redis → Cloud
 
 ## Final Composite Resume Bullet
 
-> **Enterprise Knowledge Intelligence Platform** — Built a production-grade RAG platform (FastAPI, React, **LangChain**, Qdrant, Postgres, Redis) backend-first: async ingestion via LangChain document loaders/splitters for PDF/DOCX/Markdown/URL sources, an EnsembleRetriever fusing BM25 and Qdrant dense search via RRF, LLM-based query rewriting, MultiQueryRetriever expansion, and a ContextualCompressionRetriever wrapping a cross-encoder reranker — feeding a citation-backed streaming generation chain with strict grounding and RunnableWithMessageHistory-managed conversation memory. Built a RAGAS-based evaluation pipeline (traced via LangSmith) measuring retrieval precision/recall, faithfulness, and answer relevance across configurations, using results to justify hybrid retrieval + reranking and improving faithfulness from 0.79 to 0.91. Containerized with Docker, CI/CD via GitHub Actions, load-tested, and deployed with a live demo.
+> **Enterprise Knowledge Intelligence Platform** — Built a production-grade RAG platform (FastAPI, React, **LangChain**, Qdrant, Postgres, Redis) backend-first: async ingestion via LangChain document loaders/splitters for PDF/DOCX/Markdown/URL sources, BM25 + Qdrant dense search fused with RRF, LLM-based query rewriting and paraphrase expansion, and a cross-encoder reranker — feeding a citation-backed generation pipeline with strict grounding, local-first LLM failover, and summary plus long-term conversation memory. Built a RAGAS-based evaluation pipeline (traced via LangSmith) measuring retrieval precision/recall, faithfulness, and answer relevance across configurations, using results to justify hybrid retrieval + reranking (Hit@5 0.74 → 0.93, MRR 0.55 → 0.85 vs dense-only). Containerized with Docker, CI/CD via GitHub Actions, load-tested, and deployed with a live demo.
 
 ---
 
