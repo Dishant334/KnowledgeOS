@@ -28,14 +28,6 @@ class ChunkingConfig:
     chunk_size: int = 512
     chunk_overlap: int = 64
 
-    # Parent / child chunking
-    # Used by ParentChildStrategy for PDF/DOCX.
-    parent_chunk_size: int = 2048
-    parent_chunk_overlap: int = 256
-
-    child_chunk_size: int = 512
-    child_chunk_overlap: int = 64
-
     # Slides
     slide_max_tokens: int = 1024
 
@@ -63,28 +55,6 @@ class ChunkingConfig:
         if self.chunk_overlap >= self.chunk_size:
             raise ValueError(
                 "chunk_overlap must be smaller than chunk_size"
-            )
-
-        if self.parent_chunk_size <= 0:
-            raise ValueError("parent_chunk_size must be greater than 0")
-
-        if self.parent_chunk_overlap < 0:
-            raise ValueError("parent_chunk_overlap cannot be negative")
-
-        if self.parent_chunk_overlap >= self.parent_chunk_size:
-            raise ValueError(
-                "parent_chunk_overlap must be smaller than parent_chunk_size"
-            )
-
-        if self.child_chunk_size <= 0:
-            raise ValueError("child_chunk_size must be greater than 0")
-
-        if self.child_chunk_overlap < 0:
-            raise ValueError("child_chunk_overlap cannot be negative")
-
-        if self.child_chunk_overlap >= self.child_chunk_size:
-            raise ValueError(
-                "child_chunk_overlap must be smaller than child_chunk_size"
             )
 
         if self.slide_max_tokens <= 0:

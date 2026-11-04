@@ -7,6 +7,7 @@ from functools import lru_cache
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from app.augmentation.model import Citation
+from app.core.tracing import traceable
 from app.retrieval.model import ScoredChunk
 from app.augmentation.context_builder import ContextBuilder
 from app.generation.chain import build_generation_chain
@@ -190,6 +191,16 @@ def no_answer() -> GenerationResult:
     return GenerationResult(answer=NO_ANSWER, citations=[], abstained=True)
 
 
+@traceable(
+    name="generate_answer",
+    process_inputs=lambda i: {
+        "question": i["question"], "num_chunks": len(i["chunks"]), "history_messages": len(i.get("history") or []),
+        "has_summary": bool(i.get("summary")), "num_memories": len(i.get("memories") or []),
+    },
+    process_outputs=lambda r: {
+        "answer": r.answer, "abstained": r.abstained, "citations": [c.marker for c in r.citations],
+    },
+)
 def generate_answer(
     question: str,
     llm,

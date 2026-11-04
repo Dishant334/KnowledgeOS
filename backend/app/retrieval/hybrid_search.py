@@ -1,8 +1,10 @@
 # app/retrieval/hybrid_search.py
 
+from app.core.tracing import describe_chunks, pick, traceable
 from app.retrieval.model import ScoredChunk
 
 
+@traceable(name="hybrid_search", run_type="retriever", process_inputs=pick("query", "k"), process_outputs=describe_chunks)
 def hybrid_search(vector_store, query: str, k: int, qdrant_filter=None) -> list[ScoredChunk]:
     """
     One query variant's hybrid search: dense (BGE-M3) + sparse (BM25),

@@ -11,7 +11,6 @@ class RetrievalConfig:
     candidate_pool_size: int = 30      # after merge/dedupe, before rerank
     final_top_k: int = 5               # after rerank
     reranker_model_name: str = "BAAI/bge-reranker-base"
-    use_parent_expansion: bool = True  # toggle for ablation in Phase 6 eval
 
 
 @dataclass
@@ -20,7 +19,6 @@ class ScoredChunk:
     fused_score: float | None = None       # Qdrant's server-side RRF output
     rerank_score: float | None = None
     query_variant: str | None = None
-    expanded: bool = False                 # True once parent_content has replaced page_content
 
 
 @dataclass

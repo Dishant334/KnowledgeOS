@@ -1,3 +1,5 @@
+import os
+
 from pydantic_settings import BaseSettings,SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -33,6 +35,16 @@ class Settings(BaseSettings):
      ollama_model: str = "qwen3:8b"
      ollama_base_url: str = "http://localhost:11434"
 
+     # --- Tracing with LangSmith (opt-in; see export_tracing_environment below) ---
+     # PRIVACY: when on, every traced question, retrieved passage and answer is uploaded to
+     # LangSmith's cloud. Turn the hide_* switches on to upload only the shape of each step.
+     langsmith_tracing: bool = False
+     langsmith_api_key: str = ""
+     langsmith_project: str = "knowledgeos"
+     langsmith_endpoint: str = "https://api.smith.langchain.com"
+     langsmith_hide_inputs: bool = False
+     langsmith_hide_outputs: bool = False
+
      model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -43,3 +55,28 @@ class Settings(BaseSettings):
 
 
 settings=Settings()
+
+
+def export_tracing_environment(s: Settings) -> bool:
+    """
+    LangChain / LangSmith read their configuration from environment VARIABLES, but
+    Settings only reads the .env FILE into itself. Without this step the LANGSMITH_*
+    lines in .env are silently ignored and nothing is ever traced.
+
+    Returns True if tracing is on. Tracing needs both the switch and an API key;
+    otherwise it is explicitly turned off, so it never starts by accident.
+    """
+    if not (s.langsmith_tracing and s.langsmith_api_key):
+        os.environ["LANGSMITH_TRACING"] = "false"
+        return False
+
+    os.environ["LANGSMITH_TRACING"] = "true"
+    os.environ["LANGSMITH_API_KEY"] = s.langsmith_api_key
+    os.environ["LANGSMITH_ENDPOINT"] = s.langsmith_endpoint
+    os.environ["LANGSMITH_PROJECT"] = s.langsmith_project
+    os.environ["LANGSMITH_HIDE_INPUTS"] = str(s.langsmith_hide_inputs).lower()
+    os.environ["LANGSMITH_HIDE_OUTPUTS"] = str(s.langsmith_hide_outputs).lower()
+    return True
+
+
+tracing_enabled = export_tracing_environment(settings)

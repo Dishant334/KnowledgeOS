@@ -37,56 +37,6 @@ class RecursiveCharacterStrategy(ChunkingStrategy):
         return self._splitter.split_documents([document])
 
 
-class ParentChildStrategy(ChunkingStrategy):
-    """
-    Primary strategy for PROSE (PDF/DOCX).
-
-    Splits each document into large "parent" sections first, then
-    splits each parent into smaller "child" chunks. Children are what
-    gets embedded/searched (small = precise retrieval); each child
-    carries its parent's full text in metadata["parent_content"] so
-    retrieval-time expansion can return the fuller context.
-
-    Falls back to a plain recursive split (no parent/child split)
-    when a document is too small to meaningfully have a parent
-    layer — avoids producing a single child chunk with a redundant,
-    identical parent_content.
-    """
-
-    def __init__(self, config: ChunkingConfig):
-        self.config = config
-        self._parent_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-            encoding_name=config.encoding_name,
-            chunk_size=config.parent_chunk_size,
-            chunk_overlap=config.parent_chunk_overlap,
-            separators=["\n\n", "\n", ". ", " ", ""],
-        )
-        self._child_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-            encoding_name=config.encoding_name,
-            chunk_size=config.child_chunk_size,
-            chunk_overlap=config.child_chunk_overlap,
-            separators=["\n\n", "\n", ". ", " ", ""],
-        )
-
-    def split(self, document: Document) -> list[Document]:
-        if not document.page_content or not document.page_content.strip():
-            return []
-
-        parents = self._parent_splitter.split_documents([document])
-
-        children: list[Document] = []
-        for parent_index, parent in enumerate(parents):
-            parent_id = f"{document.metadata.get('source', 'doc')}_p{parent_index}"
-
-            child_docs = self._child_splitter.split_documents([parent])
-            for child in child_docs:
-                child.metadata["parent_id"] = parent_id
-                child.metadata["parent_content"] = parent.page_content
-                children.append(child)
-
-        return children
-
-
 class SlidePassthroughStrategy(ChunkingStrategy):
     """
     Strategy for SLIDES (PPTX). Assumes the loader already emits one

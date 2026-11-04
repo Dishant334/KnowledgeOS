@@ -171,7 +171,7 @@ def test_reranker_is_cached(retrieval_corpus):
 
 def test_retrieve_without_llm_searches_the_question_as_is(retrieval_corpus):
     result = retrieve("How many vacation days do employees get?", user_id=USER_1,
-                      config=RetrievalConfig(final_top_k=3))
+                      retrieval_config=RetrievalConfig(final_top_k=3))
     assert result.rewritten_query == result.original_query
     assert result.query_variants == [result.original_query]
     assert "twenty days of paid vacation" in result.chunks[0].document.page_content
@@ -208,22 +208,3 @@ def test_retrieve_survives_a_broken_llm(retrieval_corpus):
                       history="User: hi")
     assert result.query_variants == ["How many vacation days do employees get?"]
     assert "twenty days of paid vacation" in result.chunks[0].document.page_content
-
-
-def test_parent_expansion_returns_the_full_section(retrieval_corpus):
-    """Chunks that have parent_content (PDF/DOCX prose) come back as the whole parent section."""
-    from langchain_core.documents import Document
-
-    from app.ingestion.embedding.orchestrator import EmbeddingOrchestrator
-
-    EmbeddingOrchestrator(retrieval_corpus).embed_and_index([
-        Document(page_content="Parking permits cost forty dollars.", metadata={
-            "document_id": "30", "uploaded_by": "1", "doc_type": "pdf", "source_name": "park.pdf",
-            "source": "park.pdf", "chunk_index": 0, "parent_id": "park.pdf_p0",
-            "parent_content": "PARKING SECTION. Parking permits cost forty dollars. Apply at the front desk.",
-        })
-    ])
-    result = retrieve("How much is a parking permit?", user_id=USER_1)
-    top = result.chunks[0]
-    assert top.expanded
-    assert top.document.page_content.startswith("PARKING SECTION.")

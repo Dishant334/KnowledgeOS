@@ -4,6 +4,7 @@ from dataclasses import asdict
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.tracing import traceable
 from app.db.models.conversation import Conversation
 from app.db.models.messages import Message
 from app.generation.orchestrator import (
@@ -121,6 +122,14 @@ def _remember_important_facts(user_id: int, conversation: Conversation, llm) -> 
         logger.warning("Could not update long-term memory for user %s", user_id, exc_info=True)
 
 
+@traceable(
+    name="ask",
+    process_inputs=lambda i: {"question": i["request"].query, "conversation_id": i["request"].conversation_id},
+    process_outputs=lambda r: {
+        "answer": r.answer, "abstained": r.abstained, "citations": len(r.citations),
+        "conversation_id": r.conversation_id,
+    },
+)
 def ask_question(db: Session, user_id: int, request: AskRequest, llm) -> AskResponse:
     """
     retrieve -> build cited context -> generate answer -> save the turn.

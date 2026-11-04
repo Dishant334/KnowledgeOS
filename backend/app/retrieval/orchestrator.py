@@ -3,6 +3,7 @@
 import logging
 from functools import lru_cache
 
+from app.core.tracing import describe_chunks, traceable
 from app.ingestion.embedding.models import EmbeddingConfig
 from app.ingestion.embedding.orchestrator import EmbeddingOrchestrator
 from app.ingestion.embedding.vector_store import get_vector_store
@@ -12,12 +13,9 @@ from app.retrieval.multi_query import build_multi_query_chain, generate_query_va
 from app.retrieval.hybrid_search import hybrid_search
 from app.retrieval.merge import merge_and_truncate
 from app.retrieval.reranker import get_reranker
-from app.retrieval.parent_expander import ParentExpander
 from app.retrieval.filters import build_qdrant_filter
 
 logger = logging.getLogger(__name__)
-
-parent_expander = ParentExpander()
 
 
 @lru_cache(maxsize=1)
@@ -55,18 +53,29 @@ def make_query_variants(llm, query: str, num_variants: int) -> list[str]:
     return list(dict.fromkeys(variants))  # remove duplicates, keep order
 
 
+@traceable(
+    name="retrieve",
+    process_inputs=lambda i: {
+        "question": i["question"], "doc_type": i.get("doc_type"), "document_ids": i.get("document_ids"),
+        "has_history": bool(i.get("history")), "uses_llm": i.get("llm") is not None,
+    },
+    process_outputs=lambda r: {
+        "rewritten_query": r.rewritten_query, "query_variants": r.query_variants,
+        "chunks": describe_chunks(r.chunks),
+    },
+)
 def retrieve(
     question: str,
     user_id: int,
     llm=None,
     history: str = "",
-    config: RetrievalConfig | None = None,
+    retrieval_config: RetrievalConfig | None = None,   # NOT named `config`: @traceable treats `config` as a LangChain RunnableConfig
     doc_type: str | None = None,
     document_ids: list[str] | None = None,
 ) -> RetrievalResult:
     """
     Runs the full retrieval chain for one question:
-    rewrite -> multi-query -> hybrid search (dense + BM25) -> merge -> rerank -> parent expansion.
+    rewrite -> multi-query -> hybrid search (dense + BM25) -> merge -> rerank.
 
     - user_id: results are ALWAYS limited to chunks this user uploaded.
     - llm: optional. Without it the question is searched as-is
@@ -74,7 +83,7 @@ def retrieve(
     - history: recent conversation as plain text, used to rewrite follow-up questions.
     - document_ids: optionally search only inside these documents.
     """
-    config = config or RetrievalConfig()
+    config = retrieval_config or RetrievalConfig()
 
     # step 1 + 2: rewrite the question and make query variants (only if we have an LLM)
     rewritten_query = question
@@ -111,10 +120,6 @@ def retrieve(
     # step 5: rerank with the cross-encoder
     reranker = get_reranker(config.reranker_model_name)
     top_chunks = reranker.rerank(rewritten_query, candidates, top_k=config.final_top_k)
-
-    # step 6: expand to parent content if enabled
-    if config.use_parent_expansion:
-        top_chunks = parent_expander.expand(top_chunks)
 
     return RetrievalResult(
         original_query=question,

@@ -5,6 +5,7 @@ from functools import lru_cache
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 
 from app.core.config import settings
+from app.core.tracing import describe_chunks, traceable
 from app.retrieval.model import ScoredChunk
 
 
@@ -27,6 +28,11 @@ class CrossEncoderReranker:
             cache_dir=settings.fastembed_cache_path,
         )
 
+    @traceable(
+        name="rerank",
+        process_inputs=lambda i: {"query": i["query"], "candidates": len(i["scored_chunks"]), "top_k": i["top_k"]},
+        process_outputs=describe_chunks,
+    )
     def rerank(self, query: str, scored_chunks: list[ScoredChunk], top_k: int) -> list[ScoredChunk]:
         if not scored_chunks:
             return []

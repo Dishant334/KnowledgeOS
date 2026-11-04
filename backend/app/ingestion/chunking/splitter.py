@@ -4,7 +4,6 @@ from app.ingestion.chunking.base import ChunkingStrategy
 from app.ingestion.chunking.model import ChunkingConfig, DocumentType
 from app.ingestion.chunking.strategies import (
     RecursiveCharacterStrategy,
-    ParentChildStrategy,
     SlidePassthroughStrategy,
     TableChunkingStrategy,
     HTMLSpecificStrategy,
@@ -22,7 +21,7 @@ _MIME_TO_DOCUMENT_TYPE: dict[str, DocumentType] = {
 }
 
 _STRATEGY_BUILDERS = {
-    DocumentType.PROSE: ParentChildStrategy,
+    DocumentType.PROSE: RecursiveCharacterStrategy,
     DocumentType.SLIDES: SlidePassthroughStrategy,
     DocumentType.TABULAR: TableChunkingStrategy,
     DocumentType.HTML: HTMLSpecificStrategy,

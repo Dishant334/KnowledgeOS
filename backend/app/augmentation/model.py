@@ -22,3 +22,4 @@ class AugmentedContext:
     citations: list[Citation] = field(default_factory=list)
     chunks_used: int = 0
     chunks_dropped: int = 0        # how many candidates got cut for token budget
+    used_chunks: list = field(default_factory=list)   # the chunks that made it into prompt_context, in order

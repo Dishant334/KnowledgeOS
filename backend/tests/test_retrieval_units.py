@@ -16,7 +16,6 @@ from app.retrieval.filters import build_qdrant_filter
 from app.retrieval.merge import merge_and_truncate
 from app.retrieval.model import ScoredChunk
 from app.retrieval.orchestrator import make_query_variants, rewrite_question
-from app.retrieval.parent_expander import ParentExpander
 from tests.conftest import make_fake_llm
 
 
@@ -88,38 +87,6 @@ def test_variants_dedupe_and_include_original():
 
 def test_variants_fall_back_when_llm_fails():
     assert make_query_variants(broken_llm(), "vacation policy", 4) == ["vacation policy"]
-
-
-# --- parent expansion ---------------------------------------------------------------
-
-
-def test_parent_expansion_replaces_text_and_dedupes_same_parent():
-    first = chunk("child 1", document_id="1", parent_id="p0", parent_content="WHOLE SECTION")
-    sibling = chunk("child 2", document_id="1", parent_id="p0", parent_content="WHOLE SECTION")
-    other_doc = chunk("child 3", document_id="2", parent_id="p0", parent_content="OTHER SECTION")
-    no_parent = chunk("slide text", document_id="3")
-
-    out = ParentExpander().expand([first, sibling, other_doc, no_parent])
-
-    assert [c.document.page_content for c in out] == ["WHOLE SECTION", "OTHER SECTION", "slide text"]
-    assert out[0].expanded and not out[2].expanded
-
-
-def test_pages_of_one_pdf_are_not_merged_even_though_every_page_numbers_its_sections_from_zero():
-    """
-    Found by the live run: every page's first section is called "handbook.pdf_p0", so de-duplicating
-    by that id dropped all pages but the best-ranked one ("vacation AND remote work" lost one of them).
-    """
-    vacation_page = chunk("vacation child", document_id="1", parent_id="handbook.pdf_p0", page_number=1,
-                          parent_content="PAGE 1: 25 days of vacation")
-    remote_page = chunk("remote child", document_id="1", parent_id="handbook.pdf_p0", page_number=3,
-                        parent_content="PAGE 3: remote work 3 days")
-    sibling_on_page_3 = chunk("remote child 2", document_id="1", parent_id="handbook.pdf_p0", page_number=3,
-                              parent_content="PAGE 3: remote work 3 days")
-
-    out = ParentExpander().expand([remote_page, vacation_page, sibling_on_page_3])
-
-    assert [c.document.page_content for c in out] == ["PAGE 3: remote work 3 days", "PAGE 1: 25 days of vacation"]
 
 
 # --- context builder: citation numbers match the text ----------------------------------

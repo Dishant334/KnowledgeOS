@@ -33,7 +33,7 @@ def run_retrieval(
             user_id=user_id,
             llm=llm,
             history=history,
-            config=config,
+            retrieval_config=config,
             doc_type=doc_type,
             # payload ids are strings
             document_ids=[str(i) for i in document_ids] if document_ids else None,

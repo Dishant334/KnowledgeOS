@@ -25,7 +25,7 @@ langgraph-checkpoint-postgres==3.2.0   # PostgresStore: long-term memory in our 
 celery[redis]==5.6.3
 
 # --- LangChain / RAG ---
-langchain-core==1.6.1
+langchain-core==1.7.4   # >=1.7 is required by ragas (langchain-openai)
 langchain-community==0.4.2        # document loaders
 langchain-text-splitters==1.1.2
 langchain-qdrant==1.1.0

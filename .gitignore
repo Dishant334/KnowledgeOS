@@ -16,3 +16,6 @@ venv/
 # IDE
 .vscode/
 .idea/
+
+# Raw evaluation outputs (large, regenerated); the summary report eval/results/latest.md is kept
+backend/eval/results/*/

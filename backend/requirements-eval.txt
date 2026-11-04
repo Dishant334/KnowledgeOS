@@ -1,0 +1,5 @@
+# Tools for the evaluation harness (eval/). Not needed to run the API or the worker,
+# so the production Docker image installs only requirements.txt.
+-r requirements.txt
+
+ragas==0.4.3          # LLM-as-judge RAG metrics (faithfulness, answer relevancy, context precision/recall)

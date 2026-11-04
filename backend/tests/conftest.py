@@ -64,6 +64,8 @@ os.environ.update(
         "LLM_PROVIDER": "",
         "LLM_FALLBACK_PROVIDER": "",
         "GEMINI_API_KEY": "",
+        # Tests never upload anything to LangSmith (tests that need tracing use a fake client).
+        "LANGSMITH_TRACING": "false",
     }
 )
 

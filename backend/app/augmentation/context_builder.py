@@ -45,4 +45,5 @@ class ContextBuilder:
             citations=citations,
             chunks_used=len(used_chunks),
             chunks_dropped=len(chunks) - len(used_chunks),
+            used_chunks=used_chunks,
         )
