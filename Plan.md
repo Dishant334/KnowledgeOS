@@ -179,30 +179,73 @@ Retrieved chunks → context builder → prompt → LLM → answer + citations
 
 **Built (✅):** harness in `backend/eval/` — 45-question golden set over 13 synthetic documents (5 formats), exact metrics (Hit/Recall/Precision@5, MRR, answer correctness, citations, refusals), RAGAS 0.4.3 (faithfulness, answer relevancy, context precision, context recall) with a local Qwen judge, a three-configuration comparison, p50/p95 latency and token counts, and LangSmith tracing (verified live).
 
-**Results** (measured 2026-11-04; 45 questions, 121 chunks; generator and judge both local Qwen3 8B; RAGAS on a fixed subset of 20 questions; full report `backend/eval/results/latest.md`):
+### Results
+
+| | |
+|---|---|
+| **Measured** | 2026-11-04 |
+| **Test set** | 45 questions (42 answerable, 3 out of scope), 13 synthetic documents in 5 formats, 121 chunks |
+| **Models** | Qwen3 8B (local) writes the answers *and* judges; `bge-large` embeddings + BM25; `bge-reranker-base` |
+| **RAGAS** | run on a fixed stratified subset of 20 questions (same ones for every setup) |
+| **Cost** | 0 per query (all local) |
+| **Full report** | `backend/eval/results/latest.md` |
+
+Three retrieval setups are compared; only retrieval differs, the prompt, LLM and citation logic are identical. **Bold = best in the row.**
+
+**1. Retrieval quality** (exact string matching, no LLM)
 
 | Metric | Dense only | + BM25 hybrid | + Reranker |
-|---|---|---|---|
-| Hit@5 (needed passage found) | 0.74 | 0.93 | 0.93 |
-| Recall@5 | 0.75 | 0.93 | 0.93 |
-| Precision@5 (ceiling 0.20) | 0.16 | 0.21 | 0.20 |
-| MRR (right chunk near the top) | 0.55 | 0.78 | 0.85 |
-| Answers correct | 0.74 | 0.93 | 0.93 |
-| False refusals | 0.24 | 0.07 | 0.05 |
-| Cites an expected document | 0.74 | 0.90 | 0.93 |
-| Out-of-scope refused | 1.00 | 1.00 | 1.00 |
-| RAGAS faithfulness | 0.80 | 0.75 | 0.82 |
-| RAGAS answer relevancy | 0.63 | 0.74 | 0.73 |
-| RAGAS context precision | 0.52 | 0.69 | 0.74 |
-| RAGAS context recall | 0.70 | 0.85 | 0.85 |
-| Retrieval latency p50 (ms)* | 203 | 310 | 2917 |
-| Generation latency p50 / p95 (s)* | 5.1 / 8.3 | 7.2 / 12.4 | 6.5 / 9.6 |
+|---|:---:|:---:|:---:|
+| Hit@5: needed passage found | 0.74 | **0.93** | **0.93** |
+| Recall@5 | 0.75 | **0.93** | **0.93** |
+| Precision@5 (ceiling 0.20) | 0.16 | **0.21** | 0.20 |
+| MRR: right chunk near the top | 0.55 | 0.78 | **0.85** |
 
-\*Measured on a busy laptop, so rough; idle, retrieval with rerank takes about 0.2 s and a local answer 1–4 s. Cost per query is 0.
+**2. Answer quality** (exact checks against the golden answers)
 
-Hit@5 by question type (dense / hybrid / hybrid+rerank): direct 0.79 / 1.00 / 1.00 · multi-document 0.33 / 1.00 / 1.00 · distractor 1.00 / 1.00 / 1.00 · paraphrase 0.50 / 0.50 / 0.50.
+| Metric | Dense only | + BM25 hybrid | + Reranker |
+|---|:---:|:---:|:---:|
+| Answers correct | 0.74 | **0.93** | **0.93** |
+| False refusals (lower is better) | 0.24 | 0.07 | **0.05** |
+| Cites an expected document | 0.74 | 0.90 | **0.93** |
+| Citation precision | 0.95 | **0.96** | 0.95 |
+| Out-of-scope questions refused | **1.00** | **1.00** | **1.00** |
 
-**What it shows:** hybrid search fixes multi-document questions and cuts false refusals from 0.24 to 0.07. The reranker improves ordering (MRR, context precision) but finds nothing new. No setup solves paraphrase questions. Faithfulness differences are within judge noise. Caveat: the judge is the same model that wrote the answers, so compare columns rather than trusting absolute RAGAS values; the exact metrics cannot be fooled. The corpus is small and synthetic.
+**3. RAGAS** (LLM-as-judge, 0 to 1; use the differences between columns, not the absolute values)
+
+| Metric | Dense only | + BM25 hybrid | + Reranker |
+|---|:---:|:---:|:---:|
+| Faithfulness (no hallucination) | 0.80 | 0.75 | **0.82** |
+| Answer relevancy | 0.63 | **0.74** | 0.73 |
+| Context precision | 0.52 | 0.69 | **0.74** |
+| Context recall | 0.70 | **0.85** | **0.85** |
+
+**4. Speed and tokens** (measured on a busy laptop, so rough; idle, retrieval with rerank takes about 0.2 s and a local answer 1 to 4 s)
+
+| Metric | Dense only | + BM25 hybrid | + Reranker |
+|---|:---:|:---:|:---:|
+| Retrieval latency p50 | 203 ms | 310 ms | 2917 ms |
+| Generation latency p50 / p95 | 5.1 / 8.3 s | 7.2 / 12.4 s | 6.5 / 9.6 s |
+| Tokens per question | 1628 | 1689 | 1914 |
+
+**5. Hit@5 by question type**
+
+| Question type (count) | Dense only | + BM25 hybrid | + Reranker |
+|---|:---:|:---:|:---:|
+| Direct (29) | 0.79 | **1.00** | **1.00** |
+| Multi-document (3) | 0.33 | **1.00** | **1.00** |
+| Distractor (4) | **1.00** | **1.00** | **1.00** |
+| Paraphrase (6) | 0.50 | 0.50 | 0.50 |
+
+#### What it shows
+- **Hybrid search is the big win:** Hit@5 rises from 0.74 to 0.93, mostly on multi-document questions (0.33 to 1.00), and false refusals fall from 24% to 7%.
+- **The reranker improves ordering, not coverage:** MRR 0.78 to 0.85 and context precision 0.69 to 0.74, but Hit@5 stays 0.93. It costs retrieval time (310 ms to 2917 ms in this busy-machine run).
+- **Paraphrase questions are unsolved:** 0.50 in every setup. A trial of LLM query expansion did not help (see `backend/eval/README.md`, Experiment log).
+- **Faithfulness (0.75 to 0.82) is within judge noise;** do not read a winner into it.
+
+#### Caveats
+- The judge is the same model that wrote the answers, so it tends to score generously. That is why exact metrics sit next to RAGAS: they cannot be fooled.
+- The corpus is small and synthetic, and RAGAS covers 20 of the 42 answerable questions.
 
 **Still pending (⏳):** grow the golden set from 45 to 50–100 questions, ideally with real documents.
 
@@ -210,53 +253,78 @@ Hit@5 by question type (dense / hybrid / hybrid+rerank): direct 0.79 / 1.00 / 1.
 
 ---
 
-## Phase 6 addendum — How the evaluation pipeline works
+## Phase 6 addendum — The evaluation harness
 
-Code: `backend/eval/` (full guide: `backend/eval/README.md`). It runs the **real** ingestion, retrieval and generation code, so the numbers describe the actual product.
+Code: `backend/eval/` (full guide: `backend/eval/README.md`). It runs the **real** ingestion, retrieval and generation code, so the numbers describe the actual product, not a mock.
 
+### How a run flows
+```text
+ corpus.py ──► ingest.py ──► Qdrant (own collection: knowledgeos_eval)
+                                         │
+ golden_set.jsonl ──► pipelines.py: each question x 3 retrieval setups
+ (question + answer      │          then the real generator
+  + where it is)         ▼
+              ┌──────────┴───────────┐
+              ▼                      ▼
+     metrics.py (exact)      ragas_scoring.py (LLM judge)
+              └──────────┬───────────┘
+                         ▼
+          report.py ──► report.md + summary.json
 ```
-golden_set.jsonl + corpus.py  →  ingest.py  →  pipelines.py  →  metrics.py (exact)  ┐
- (questions + known answers)     (own Qdrant     (3 retrieval    ragas_scoring.py     ├→ report.py → report.md
-                                  collection)     configs)        (LLM judge)         ┘
-```
 
-**Setup and run** (from `backend/`):
+### Run it
+Everything runs from `backend/`.
 
 ```bash
-docker compose up -d qdrant                    # the eval needs Qdrant, not Postgres/Redis
+# one-time setup
+docker compose up -d qdrant                    # the eval needs Qdrant only (not Postgres or Redis)
 ollama pull qwen3:8b                           # generator and judge (local, free)
 pip install -r requirements-eval.txt           # requirements.txt + ragas==0.4.3
-OLLAMA_NUM_PARALLEL=4 ollama serve             # RAGAS makes ~11 judge calls per answer
+OLLAMA_NUM_PARALLEL=4 ollama serve             # RAGAS makes about 11 judge calls per answer
+
+# runs
 python -m eval.run                             # full run, about an hour
 python -m eval.run --limit 8 --no-ragas        # smoke test, a few minutes
-python -m eval.run --ragas-sample 20           # RAGAS on 20 questions only (same ones per config)
+python -m eval.run --ragas-sample 20           # RAGAS on 20 questions only
 python -m eval.run --reuse eval/results/<run>  # reload finished stages instead of redoing them
-pytest -q tests/test_eval_harness.py           # harness tests (29)
+
+# tests for the harness itself
+pytest -q tests/test_eval_harness.py           # 29 tests
 ```
 
-Useful flags: `--configs`, `--types`, `--limit`, `--skip-ingest`, `--generator/--judge ollama|gemini`, `--trace` (LangSmith, off by default).
+Other flags: `--configs`, `--types`, `--limit`, `--skip-ingest`, `--generator` / `--judge` (`ollama` or `gemini`), `--trace` (LangSmith, off by default).
 
-**What each file does**
+### What each file does
+| Step | File | Role |
+|:---:|---|---|
+| – | `run.py` | Conductor: parses flags, forces the separate `knowledgeos_eval` collection and tracing off, runs the stages, caches each one to JSON (`--reuse`). |
+| 1 | `corpus.py` | Builds 13 synthetic documents in 5 formats with deliberate traps (Europe vs US travel policy, answers split across documents). Deterministic. |
+| 1 | `golden_set.jsonl` | The answer key: 45 questions, each with the correct answer, the exact sentence that answers it, and a type. |
+| 2 | `ingest.py` | Loads the corpus with the production `ingest_file()` under a fake user. Refuses to run against the real `documents` collection. |
+| 3 | `pipelines.py` | Runs every question through `dense`, `hybrid` and `hybrid+rerank`, then the real `generate_answer()`; records timings, tokens and which chunks fit the prompt. |
+| 4 | `metrics.py` | Exact, no-LLM metrics by string matching. |
+| 5 | `ragas_scoring.py` | RAGAS metrics with the local judge. A failed judge call becomes NaN, not a crash. |
+| 6 | `report.py` | Builds the tables, Hit@5 by question type, and the list of questions that still fail. |
+| – | `compat.py` | Stand-ins for two Vertex classes RAGAS 0.4.3 imports but `langchain-community` no longer has. Delete when RAGAS fixes it. |
 
-| File | Role |
-|---|---|
-| `run.py` | Conductor: parses flags, forces the separate collection `knowledgeos_eval` and tracing off, runs the stages, caches each stage to JSON (`--reuse`), writes the report. |
-| `corpus.py` | Builds 13 synthetic documents in 5 formats with deliberate traps (Europe vs US travel policy, answers split across documents). Deterministic. |
-| `golden_set.jsonl` | 45 questions: `question`, `reference` answer, `expected` (document + exact answering sentence), `answer_regex`, `type` (direct, paraphrase, distractor, multi, out_of_scope). |
-| `ingest.py` | Pushes the corpus through the production `ingest_file()` into the eval collection under fake user 424242. Refuses to run against the real `documents` collection. |
-| `pipelines.py` | For every question and every config (`dense`, `hybrid`, `hybrid+rerank`): retrieve top 5, call the real `generate_answer()`, time both, count tokens, record which chunks actually fit the prompt. Only retrieval differs between configs. |
-| `metrics.py` | Exact, no-LLM metrics by string matching: Hit/Recall/Precision@5, MRR, answer correctness, false refusals, citation hit and precision, out-of-scope refusal. |
-| `ragas_scoring.py` | RAGAS with the local judge: faithfulness (supported claims ÷ claims), answer relevancy (questions regenerated from the answer vs the real question), context precision (useful chunks ranked high), context recall (reference sentences found in the contexts). A failed judge call becomes NaN, not a crash. |
-| `compat.py` | Stand-ins for two Vertex classes RAGAS 0.4.3 imports but `langchain-community` no longer has. Delete when RAGAS fixes it. |
-| `report.py` | Builds the tables, the Hit@5-by-question-type table and the list of still-failing questions. |
-
-**Honest caveats:** the judge is a small local model that also wrote the answers (self-preference, noise), so compare columns, don't trust absolute RAGAS values; the exact metrics cannot be fooled. The corpus is small and synthetic. RAGAS runs on 20 of the 42 answerable questions because local judging is slow.
+### The metrics in one table
+| Metric | Kind | Question it answers | Catches |
+|---|---|---|---|
+| Hit@5 / Recall@5 | exact | Was the needed passage in the top 5? | retrieval misses |
+| Precision@5 | exact | What fraction of the 5 chunks is relevant? | noisy retrieval |
+| MRR | exact | How high is the first right chunk? (1.0 first place, 0.5 second) | bad ordering |
+| Answer correct, false refusal | exact | Does the answer match the golden one, or did it refuse needlessly? | wrong or timid answers |
+| Citation hit / precision | exact | Did it cite the right document, and how many citations were right? | wrong sources |
+| Faithfulness | RAGAS | Is every claim in the answer supported by the retrieved text? | hallucination |
+| Answer relevancy | RAGAS | Would the answer fit the question that was asked? | evasive or off-topic answers |
+| Context precision | RAGAS | Are the useful chunks ranked at the top? | badly ordered retrieval |
+| Context recall | RAGAS | Does the retrieved text contain everything the golden answer says? | information retrieval missed |
 
 ---
 
 ## Phase 7 — Production Backend Hardening (4–5 days)
 
-> **Status: 🟡 rate limiting done** (per-user token bucket 10 questions/min + 100/day, uploads 10/hour, counters in Redis, fails open; no concurrency cap by choice). ⏳ Still pending: prompt-injection test with a poisoned document, JSON logs with request IDs, load test.
+> **Status: 🟡 rate limiting done (see Phase 8b).** ⏳ Still pending: prompt-injection test with a poisoned document, JSON logs with request IDs, load test.
 
 **Goal:** The stuff that makes it "production-grade" rather than "it works on my machine."
 
@@ -289,7 +357,31 @@ Useful flags: `--configs`, `--types`, `--limit`, `--skip-ingest`, `--generator/-
 
 ---
 
-## Phase 9 — CI/CD (2–3 days)
+## Phase 9 — Rate Limiting ✅
+
+**Goal:** Protect the expensive endpoints (`/ask` costs LLM time and, through the Gemini fallback, free-tier quota; uploads trigger embedding work) from one user, a bug or a script. Sized for the real use: the owner plus an occasional visitor.
+
+**Built (✅):** `backend/app/core/rate_limit.py`, per user, all counters in Redis (keys `rl:*`).
+
+| Limit | Applies to | Default (env setting) | Algorithm |
+|---|---|---|---|
+| Burst | `/ask` and `/ask/stream`, one shared budget | 10 per minute (`ASK_PER_MINUTE`) | token bucket |
+| Daily cap | the same | 100 per UTC day (`ASK_PER_DAY`) | fixed-window counter, expires at UTC midnight |
+| Uploads | `POST /documents` | 10 per hour (`UPLOAD_PER_HOUR`) | token bucket |
+
+- Each check is one Lua script, so check-and-update is atomic and takes one Redis round trip; the bucket reads Redis's own clock.
+- Check order on `/ask`: burst first, then daily, so a request refused by the burst limit never spends daily budget.
+- Over a limit: HTTP 429 with `Retry-After`, `X-RateLimit-Limit` and `X-RateLimit-Reset`, decided before retrieval, the LLM or the stream start. A rejected `/ask/stream` is a real JSON 429; nothing is saved and no LLM quota is spent.
+- Fails open: if Redis is down or slow (0.25 s timeout) the request goes through and a warning is logged. `RATE_LIMIT_ENABLED=false` switches it off.
+- Checked: 21 new tests against real Redis (522 tests passing in total), a mutation check that the check-order test really fails when the order is swapped, and a live run over HTTP with the limit set to 2 per minute (2 answered, 3rd and 4th refused in 0.00 s with `Retry-After`, recovered after waiting).
+
+**Decided not to build:** a cap on concurrent `/ask` calls (removed on purpose; only the per-minute limit bounds overlap), limits on `/retrieve` and other routes, an in-app per-IP limit (leave that to Cloudflare at deploy time).
+
+**Resume line:** *"Added Redis-backed per-user rate limiting (token bucket and daily quota, atomic Lua scripts, 429 with Retry-After, fail-open) to protect LLM and embedding cost, verified with integration tests and a live run."*
+
+---
+
+## Phase 10 — CI/CD (2–3 days)
 
 **Goal:** Demonstrate you understand the pipeline — not a DevOps deep-dive. For a strong resume signal, breadth here beats depth.
 
@@ -308,7 +400,7 @@ git push → GitHub Actions → Lint → Unit Tests → Integration Tests → Bu
 
 ---
 
-## Phase 10 — Frontend (1–2 weeks)
+## Phase 11 — Frontend (1–2 weeks)
 
 **Goal:** A UI that demos well — by this point the backend is proven and evaluated, so the frontend is "just" surfacing it well.
 
@@ -331,7 +423,7 @@ Upload PDF → Processing → Ask question → Streaming answer → [1][2][3] ci
 
 ---
 
-## Phase 11 — Deployment & Final Polish (3–5 days)
+## Phase 12 — Deployment & Final Polish (3–5 days)
 
 **Goal:** Ship it somewhere clickable, and package the story.
 
@@ -368,9 +460,10 @@ Qdrant / Postgres / Redis → Cloud
 | 6 | Evaluation | 1 week | 🟡 (harness ✅, bigger golden set ⏳) |
 | 7 | Production hardening | 4–5 days | 🟡 (rate limiting ✅; injection test, JSON logs, load test ⏳) |
 | 8 | Docker | 3–4 days | 🟡 (health checks, prod compose ⏳) |
-| 9 | CI/CD | 2–3 days | ⏳ |
-| 10 | React frontend | 1–2 weeks | ⏳ |
-| 11 | Deployment & polish | 3–5 days | ⏳ |
+| 9 | Rate limiting | 1 day | ✅ |
+| 10 | CI/CD | 2–3 days | ⏳ |
+| 11 | React frontend | 1–2 weeks | ⏳ |
+| 12 | Deployment & polish | 3–5 days | ⏳ |
 
 **Total: \~10–12 weeks part-time, \~7–8 weeks full-time.**
 
