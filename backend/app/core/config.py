@@ -1,5 +1,6 @@
 import os
 
+from pydantic import Field
 from pydantic_settings import BaseSettings,SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -18,6 +19,13 @@ class Settings(BaseSettings):
      qdrant_collection: str = "documents"
      # Celery broker + result backend (compose sets redis://redis:6379/0 for containers).
      redis_url: str = "redis://localhost:6379/0"
+
+     # --- Rate limiting (app/core/rate_limit.py; the counters live in Redis) ---
+     # Per user. /ask and /ask/stream share one budget. If Redis is down the limiter lets requests through.
+     rate_limit_enabled: bool = True
+     ask_per_minute: int = Field(10, ge=1)      # token bucket: a burst of this many, refilling steadily over a minute
+     ask_per_day: int = Field(100, ge=1)        # per UTC day (also protects the small Gemini fallback quota)
+     upload_per_hour: int = Field(10, ge=1)     # token bucket: document uploads
      # Where fastembed stores model weights. fastembed itself only reads the
      # process environment, so this is passed explicitly (relative = CWD).
      fastembed_cache_path: str | None = None

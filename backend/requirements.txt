@@ -23,6 +23,7 @@ langgraph-checkpoint-postgres==3.2.0   # PostgresStore: long-term memory in our 
 
 # --- Background jobs ---
 celery[redis]==5.6.3
+redis==6.4.0                      # also imported directly by app/core/rate_limit.py (rate limiting)
 
 # --- LangChain / RAG ---
 langchain-core==1.7.4   # >=1.7 is required by ragas (langchain-openai)

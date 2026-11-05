@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models.user import User
 from app.dependencies.auth import get_current_user
+from app.core.rate_limit import limit_upload
 from app.schemas.document import DocumentOut
 from app.services.document import (
     create_document,
@@ -31,6 +32,7 @@ router = APIRouter(
     "",
     response_model=DocumentOut,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_upload)],
 )
 async def upload_document(
     file: UploadFile = File(...),

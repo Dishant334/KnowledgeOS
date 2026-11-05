@@ -66,6 +66,8 @@ os.environ.update(
         "GEMINI_API_KEY": "",
         # Tests never upload anything to LangSmith (tests that need tracing use a fake client).
         "LANGSMITH_TRACING": "false",
+        # Many tests call /ask and upload files over and over; only tests/test_rate_limit.py turns limits on.
+        "RATE_LIMIT_ENABLED": "false",
     }
 )
 

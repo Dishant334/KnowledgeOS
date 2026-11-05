@@ -256,6 +256,8 @@ Useful flags: `--configs`, `--types`, `--limit`, `--skip-ingest`, `--generator/-
 
 ## Phase 7 — Production Backend Hardening (4–5 days)
 
+> **Status: 🟡 rate limiting done** (per-user token bucket 10 questions/min + 100/day, uploads 10/hour, counters in Redis, fails open; no concurrency cap by choice). ⏳ Still pending: prompt-injection test with a poisoned document, JSON logs with request IDs, load test.
+
 **Goal:** The stuff that makes it "production-grade" rather than "it works on my machine."
 
 - Structured logging (JSON logs, request IDs, correlate across the ingestion/retrieval/generation path).
@@ -364,7 +366,7 @@ Qdrant / Postgres / Redis → Cloud
 | 4 | Advanced RAG (hybrid + rerank) | 1–2 weeks | 🟡 (paraphrase quality ⏳) |
 | 5 | Generation | 4–5 days | ✅ |
 | 6 | Evaluation | 1 week | 🟡 (harness ✅, bigger golden set ⏳) |
-| 7 | Production hardening | 4–5 days | ⏳ |
+| 7 | Production hardening | 4–5 days | 🟡 (rate limiting ✅; injection test, JSON logs, load test ⏳) |
 | 8 | Docker | 3–4 days | 🟡 (health checks, prod compose ⏳) |
 | 9 | CI/CD | 2–3 days | ⏳ |
 | 10 | React frontend | 1–2 weeks | ⏳ |

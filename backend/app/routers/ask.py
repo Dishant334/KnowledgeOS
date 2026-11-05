@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.dependencies.auth import get_current_user
 from app.db.database import get_db
 from app.db.models.user import User
+from app.core.rate_limit import limit_ask
 from app.generation.llm import get_llm
 from app.schemas.ask import AskRequest, AskResponse
 from app.services.ask import ask_question, ask_stream
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/ask", response_model=AskResponse)
+@router.post("/ask", response_model=AskResponse, dependencies=[Depends(limit_ask)])
 def ask(
     request: AskRequest,
     current_user: User = Depends(get_current_user),
@@ -38,7 +39,7 @@ def sse_event(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-@router.post("/ask/stream")
+@router.post("/ask/stream", dependencies=[Depends(limit_ask)])
 def ask_streaming(
     request: AskRequest,
     current_user: User = Depends(get_current_user),
