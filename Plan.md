@@ -421,6 +421,8 @@ git push → GitHub Actions → Lint → Unit Tests → Integration Tests → Bu
 
 ## Phase 11 — Frontend (1–2 weeks)
 
+> **Status: 🟡 in progress, built in steps.** Stack decided: plain JavaScript, React 19 + Vite 8, React Router, axios, Tailwind v4, Clerk. ✅ Step 1 foundation (Clerk login, protected routes, app shell, API client with token and error handling). ⏳ Step 2 documents page, step 3 chat with streaming and citations, step 4 conversation sidebar, step 5 memory page and polish. Frontend tests, README and demo come after. Final routes: `/sign-in`, `/sign-up`, `/chat`, `/chat/:conversationId` (with the conversation sidebar), `/documents`, `/memory`.
+
 **Goal:** A UI that demos well — by this point the backend is proven and evaluated, so the frontend is "just" surfacing it well.
 
 Pages: `/home` , `/login`, `/register`, `/documents`, `/chat`, `/conversations`.
@@ -481,7 +483,7 @@ Qdrant / Postgres / Redis → Cloud
 | 8 | Docker | 3–4 days | 🟡 (health checks ✅; prod compose, fresh-clone test ⏳) |
 | 9 | Rate limiting | 1 day | ✅ |
 | 10 | CI/CD | 2–3 days | ⏳ |
-| 11 | React frontend | 1–2 weeks | ⏳ |
+| 11 | React frontend | 1–2 weeks | 🟡 (step 1 of 5 done) |
 | 12 | Deployment & polish | 3–5 days | ⏳ |
 
 **Total: \~10–12 weeks part-time, \~7–8 weeks full-time.**
