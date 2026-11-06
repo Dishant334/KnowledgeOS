@@ -192,7 +192,7 @@ def test_repeated_requests_do_not_duplicate_user(client, db):
 
 # --- Route protection --------------------------------------------------------
 
-PUBLIC_PATHS = {"/health", "/test-db", "/webhooks/clerk", "/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect"}
+PUBLIC_PATHS = {"/health", "/webhooks/clerk", "/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect"}
 
 
 def _operations(fastapi_app):
@@ -220,6 +220,17 @@ def test_all_mounted_non_public_routes_require_auth(app, client):
     assert ops, "expected at least one protected route"
     for method, path in ops:
         assert _anonymous_call(client, method, path).status_code == 401, (method, path)
+
+
+def test_only_the_health_check_and_the_webhook_are_open_to_anonymous_callers(app, client):
+    """The old unauthenticated /test-db debug route (it returned raw database errors) must stay gone."""
+    open_calls = {
+        (m, p) for m, p in _operations(app)
+        if p not in {"/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect"}
+        and _anonymous_call(client, m, p).status_code != 401
+    }
+    assert {p for _, p in open_calls} == {"/health", "/webhooks/clerk"}
+    assert client.get("/test-db").status_code == 404
 
 
 @pytest.mark.parametrize("module", ["app.routers.document", "app.routers.retrieve", "app.routers.ask"])

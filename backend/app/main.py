@@ -1,14 +1,15 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from sqlalchemy import text
+from fastapi.middleware.cors import CORSMiddleware
 from app.routers.auth import router as auth_router
 from app.routers.document import router as document_router
 from app.routers.retrieve import router as retrieve_router
 from app.routers.ask import router as ask_router
 from app.routers.memory import router as memory_router
 from app.routers.conversations import router as conversations_router
-from app.db.database import engine
+from app.core.config import settings
+from app.core.cors import cors_options
 from app.memory.store import close_memory_store
 
 
@@ -21,25 +22,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="KnowledgeOS", lifespan=lifespan)
 
+# Lets the browser frontend call the API (see app/core/cors.py). Added before the routes; it answers the
+# browser's preflight requests itself, so they never reach authentication.
+_cors = cors_options(settings.cors_origins)
+if _cors:
+    app.add_middleware(CORSMiddleware, **_cors)
+
 
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
-
-
-@app.get("/test-db")
-def test_db():
-    try:
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
-
-        return {"status": "connected"}
-
-    except Exception as e:
-        return {
-            "status": "failed",
-            "error": str(e),
-        }
 
 
 app.include_router(auth_router)

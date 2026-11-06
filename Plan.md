@@ -79,6 +79,8 @@ FastAPI
 * `users` stores the application's user record and **Clerk user ID**, not passwords or authentication credentials.
 * Protected document endpoints enforce user-level data isolation — users can only access their own documents.
 
+> **Frontend readiness (✅ 2026-11-07):** CORS with env-driven origins (`CORS_ORIGINS`, exposes `Retry-After` and `X-RateLimit-*`), a friendly `failure_reason` on documents (raw error text stays private), and the unauthenticated `/test-db` debug route removed.
+
 **Skills exercised:** FastAPI, Pydantic, Clerk authentication, JWT verification, dependency injection, PostgreSQL, Alembic, file uploads, async patterns, authorization, and error handling.
 
 **Deliverable:** Swagger docs showing every route, Clerk-authenticated requests successfully verified by FastAPI, authenticated users mapped to PostgreSQL, protected document endpoints working with validation, and `/retrieve` and `/ask` wired as typed stubs.

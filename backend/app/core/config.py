@@ -20,6 +20,10 @@ class Settings(BaseSettings):
      # Celery broker + result backend (compose sets redis://redis:6379/0 for containers).
      redis_url: str = "redis://localhost:6379/0"
 
+     # --- CORS (app/core/cors.py): browser origins allowed to call the API, comma-separated ---
+     # Default: the Vite dev server. Deployed: set your real frontend address(es). Empty = CORS off.
+     cors_origins: str = "http://localhost:5173"
+
      # --- Rate limiting (app/core/rate_limit.py; the counters live in Redis) ---
      # Per user. /ask and /ask/stream share one budget. If Redis is down the limiter lets requests through.
      rate_limit_enabled: bool = True
