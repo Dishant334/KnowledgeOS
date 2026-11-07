@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import ChatBackground from './ChatBackground'
 import Composer from './Composer'
 import CitationPanel from './CitationPanel'
 import ConversationSidebar from './ConversationSidebar'
@@ -36,7 +37,8 @@ export default function ChatLayout({ empty }) {
     <div className="relative flex h-full min-h-0">
       <ConversationSidebar open={drawerOpen} onClose={() => setDrawerOpen(false)} activeId={null} onSelect={() => setDrawerOpen(false)} />
 
-      <section className="flex min-w-0 flex-1 flex-col">
+      <section className="relative isolate flex min-w-0 flex-1 flex-col">
+        <ChatBackground />
         <div className="flex items-center gap-2 border-b border-stone-200 px-3 py-2 md:hidden">
           <button
             type="button"

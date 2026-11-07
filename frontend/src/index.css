@@ -52,6 +52,73 @@ body {
     0 0 96px 12px rgb(64 191 170 / 0.2);
 }
 
+/* the KnowledgeOS letters behind the chat (ChatBackground.jsx). --tx/--ty/--near are set from the mouse position */
+.letter-push {
+  --tx: 0px;
+  --ty: 0px;
+  --near: 0;
+  translate: var(--tx) var(--ty);
+  scale: calc(1 + var(--near) * 0.12);
+  opacity: calc(0.11 + var(--near) * 0.2);
+}
+.letter-fill,
+.letter-fill-accent {
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  padding: 0 0.02em; /* keeps the gradient from clipping the edges of slanted letters */
+}
+.letter-fill { background-image: linear-gradient(165deg, var(--color-brand-500), var(--color-brand-900)); }
+.letter-fill-accent { background-image: linear-gradient(165deg, var(--color-highlight), #b9770b); }
+
+/* the question box's glow (Composer.jsx): while the box has focus, a 2 px border of mint/amber light (a conic gradient
+   behind the white box, peeking out around it) and a soft halo. The angle is a registered property so it can animate. */
+@property --composer-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+.composer-glow {
+  position: relative;
+  isolation: isolate;
+  border-radius: 1rem;
+}
+.composer-glow::before,
+.composer-glow::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: calc(1rem + 2px);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 450ms ease;
+}
+.composer-glow::before {
+  z-index: -1;
+  background: conic-gradient(
+    from var(--composer-angle),
+    var(--color-brand-300),
+    var(--color-highlight),
+    var(--color-brand-400),
+    var(--color-brand-200),
+    var(--color-brand-300)
+  );
+}
+.composer-glow::after {
+  z-index: -2;
+  box-shadow:
+    0 0 22px 3px rgb(64 191 170 / 0.32),
+    0 0 60px 10px rgb(245 184 46 / 0.12);
+}
+.composer-glow:focus-within::before,
+.composer-glow:focus-within::after {
+  opacity: 1;
+}
+/* hovering (before clicking) shows only a faint, small version of the halo: no border light */
+.composer-glow:hover:not(:focus-within)::after {
+  opacity: 0.8;
+}
+
 /* the wires on the dark panel (PanelWires.jsx): with no animation the pulse sits just before the start of its wire, out
    of sight, so only the dim wire shows. The node is a quiet dot until the pulse arrives. */
 .wire-pulse {
@@ -192,5 +259,23 @@ body {
   @keyframes sheet-in { from { opacity: 0; translate: 0 40px; } to { opacity: 1; translate: 0 0; } }
   .source-panel { animation: sheet-in 250ms cubic-bezier(0.22, 1, 0.36, 1) both; }
   @media (min-width: 768px) { .source-panel { animation-name: panel-in; } }
+  /* the KnowledgeOS letters: eased mouse push, a slow float per letter, and the dotted thread's dashes travelling */
+  @keyframes letter-float {
+    from { transform: translateY(0); }
+    to { transform: translateY(-0.12em); }
+  }
+  @keyframes letter-thread { to { stroke-dashoffset: -90; } }
+  .letter-push { transition: translate 600ms cubic-bezier(0.22, 1, 0.36, 1), scale 600ms cubic-bezier(0.22, 1, 0.36, 1), opacity 400ms; }
+  .letter-float { animation: letter-float 8s ease-in-out infinite alternate; }
+  .letter-thread { animation: letter-thread 12s linear infinite; }
+  /* the question box's glow: the light travels around the border, and the halo blooms once each time the box gets focus */
+  @keyframes composer-spin { to { --composer-angle: 360deg; } }
+  @keyframes composer-bloom {
+    0% { opacity: 0; transform: scale(0.97); }
+    35% { opacity: 1; transform: scale(1.012); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  .composer-glow:focus-within::before { animation: composer-spin 4s linear infinite; }
+  .composer-glow:focus-within::after { animation: composer-bloom 700ms cubic-bezier(0.22, 1, 0.36, 1) both; }
   .page-in { animation: page-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 }
