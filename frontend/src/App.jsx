@@ -23,7 +23,7 @@ export default function App() {
         <Route element={<RequireAuth />}>
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="/chat" replace />} />
-            <Route path="chat" element={<ChatLayout empty />} />
+            <Route path="chat" element={<ChatLayout />} />
             <Route path="chat/:conversationId" element={<ChatLayout />} />
             <Route path="documents" element={<ComingSoonPage title="Documents" step={2} />} />
             <Route path="memory" element={<ComingSoonPage title="Memory" step={5} />} />

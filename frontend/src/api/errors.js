@@ -35,7 +35,13 @@ export function toApiError(error) {
   }
 
   const { status, data, headers } = response
-  const detail = detailText(data?.detail)
+  return errorFromStatus(status, data?.detail, headers?.['retry-after'])
+}
+
+// An HTTP error status (+ the backend's `detail` and the Retry-After header) -> ApiError. Shared by axios calls and
+// the streaming chat call (fetch).
+export function errorFromStatus(status, rawDetail, retryAfterHeader) {
+  const detail = detailText(rawDetail)
 
   if (status === 401) return new ApiError('Your session has expired. Please sign in again.', { status, code: 'auth' })
   if (status === 404) return new ApiError(detail || 'Not found.', { status, code: 'not_found' })
@@ -45,7 +51,7 @@ export function toApiError(error) {
     return new ApiError(detail || 'Too many requests. Please slow down.', {
       status,
       code: 'rate_limited',
-      retryAfter: parseRetryAfter(headers?.['retry-after']),
+      retryAfter: parseRetryAfter(retryAfterHeader),
     })
   }
   if (status >= 500) return new ApiError(detail || 'The server had a problem. Please try again.', { status, code: 'server' })

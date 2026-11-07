@@ -29,7 +29,7 @@ from app.generation.llm import get_llm
 from app.memory import store
 from app.memory.consolidate import update_long_term_memory
 from app.retrieval.model import ScoredChunk
-from tests.conftest import TEST_QDRANT_COLLECTION, auth_header, make_fake_llm, make_token, unique_clerk_id
+from tests.conftest import TEST_QDRANT_COLLECTION, auth_header, chat_with_documents, make_fake_llm, make_token, unique_clerk_id
 from tests.injection_payloads import (
     ALICE_DOCS,
     ALL_CANARIES,
@@ -116,7 +116,14 @@ def headers_for(user):
     return auth_header(make_token(user.clerk_user_id))
 
 
+def owned_documents(user):
+    """Alice (1) owns the poisoned documents, Bob (2) the clean one, anyone else nothing."""
+    return {1: [doc.document_id for doc in ALICE_DOCS], 2: [BOB_DOC.document_id]}.get(user.id, [])
+
+
 def ask(client, user, question, **extra):
+    """Asks in a new chat holding the user's own documents (questions only search their conversation's documents)."""
+    extra.setdefault("conversation_id", chat_with_documents(user.id, owned_documents(user)))
     resp = client.post("/ask", headers=headers_for(user), json={"query": question, **extra})
     assert resp.status_code == 200, resp.text
     return resp.json()
@@ -258,6 +265,27 @@ def test_a_memory_that_claims_admin_rights_does_not_widen_what_a_user_can_retrie
 
     assert OVERRIDE.canary not in "".join(calls)
     assert {c["document_id"] for c in response["citations"]} <= {BOB_DOC.document_id}
+
+
+def test_linking_another_users_document_into_your_chat_still_retrieves_nothing_of_it(client, users, use_llm, db):
+    """Defence in depth: even a (forged) link to Alice's document in Bob's chat is blocked by the user-id filter."""
+    from app.db.models import Conversation, ConversationDocument, Document
+
+    calls = []
+    use_llm(make_fake_llm(answer="Ok [1].", calls=calls))
+    alice, bob = users
+    chat_with_documents(alice.id, [OVERRIDE.document_id])              # creates Alice's document row
+    bobs_chat = Conversation(user_id=bob.id)
+    db.add(bobs_chat)
+    db.flush()
+    db.add(ConversationDocument(conversation_id=bobs_chat.id, document_id=OVERRIDE.document_id, uploaded_here=False))
+    db.commit()
+    assert db.get(Document, OVERRIDE.document_id).user_id == alice.id
+
+    response = ask(client, bob, OVERRIDE.question, conversation_id=bobs_chat.id)
+
+    assert OVERRIDE.canary not in "".join(calls)
+    assert response["citations"] == []
 
 
 # --- 7: nothing retrieved, nothing asked of the model ----------------------------------------------------------------

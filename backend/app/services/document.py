@@ -58,7 +58,29 @@ async def create_document(
     db: Session,
     user: User,
     file: UploadFile,
+    conversation_id: int | None = None,
 ) -> Document:
+    """
+    Saves an upload (or returns the user's existing copy of the same file) and, when conversation_id is given,
+    attaches it to that conversation: questions asked there search only its documents. The conversation must be
+    the user's own (404 otherwise), checked before the file is read.
+    """
+    from app.services.conversations import find_user_conversation, link_document
+
+    if conversation_id is not None:
+        try:
+            find_user_conversation(db, user.id, conversation_id)
+        except LookupError:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+
+    document, created = await _save_document(db, user, file)
+    if conversation_id is not None:
+        link_document(db, conversation_id, document.id, uploaded_here=created)
+    return document
+
+
+async def _save_document(db: Session, user: User, file: UploadFile) -> tuple[Document, bool]:
+    """(document, created): created is False when the user's existing copy of the same file is returned."""
 
     
     #Check duplicate
@@ -86,7 +108,7 @@ async def create_document(
     # Dedup is per user: never return another user's document.
     existing = _find_user_document_by_hash(db, user.id, document_hash)
     if existing:
-        return existing
+        return existing, False
 
     # Validate size
     if len(content) > MAX_FILE_SIZE:
@@ -122,7 +144,7 @@ async def create_document(
         db.rollback()
         existing = _find_user_document_by_hash(db, user.id, document_hash)
         if existing:
-            return existing
+            return existing, False
         raise HTTPException(status_code=500, detail="Failed to save document")
     except Exception:
         db.rollback()
@@ -130,7 +152,7 @@ async def create_document(
 
     # Queue ingestion only AFTER commit, so the worker can always see the row.
     _dispatch_ingestion(db, document)
-    return document
+    return document, True
 
 
 def _dispatch_ingestion(db: Session, document: Document) -> None:

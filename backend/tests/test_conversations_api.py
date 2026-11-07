@@ -13,7 +13,7 @@ import pytest
 from app.augmentation.citation_mapper import SNIPPET_CHARS, make_snippet
 from app.db.models import Conversation, Message
 from app.memory import store
-from tests.conftest import make_fake_llm
+from tests.conftest import CORPUS_DOCUMENTS, attach_documents, chat_with_documents, make_fake_llm
 from tests.test_ask_stream import make_streaming_llm, parse_events
 from tests.test_retrieve_ask_api import headers_for, use_llm, users  # noqa: F401  (shared fixtures)
 
@@ -22,6 +22,11 @@ ANSWER = "Employees get twenty days of paid vacation [1]."
 
 
 def ask(client, user, **payload):
+    """Asks QUESTION into the given conversation (its documents attached) or into a new chat with the user's documents."""
+    if "conversation_id" in payload:
+        attach_documents(payload["conversation_id"], user.id, CORPUS_DOCUMENTS[user.id])
+    else:
+        payload["conversation_id"] = chat_with_documents(user.id, CORPUS_DOCUMENTS[user.id])
     resp = client.post("/ask", headers=headers_for(user), json={"query": QUESTION, **payload})
     assert resp.status_code == 200, resp.text
     return resp.json()
@@ -77,7 +82,8 @@ def test_messages_come_back_oldest_first_across_turns(client, users, use_llm):
 
 def test_streamed_answers_store_their_citations_too(client, users, use_llm):
     use_llm(make_streaming_llm())
-    resp = client.post("/ask/stream", headers=headers_for(users[0]), json={"query": QUESTION})
+    chat = chat_with_documents(users[0].id, CORPUS_DOCUMENTS[1])
+    resp = client.post("/ask/stream", headers=headers_for(users[0]), json={"query": QUESTION, "conversation_id": chat})
     done = parse_events(resp.text)[-1][1]
 
     stored = get_conversation(client, users[0], done["conversation_id"]).json()["messages"][1]
@@ -188,15 +194,15 @@ def create(client, user, **body):
     return client.post("/conversations", headers=headers_for(user), json=body or None)
 
 
-def test_new_chat_is_empty_untitled_and_listed(client, users):
+def test_new_chat_is_empty_untitled_and_not_listed_until_it_has_a_message(client, users):
     resp = create(client, users[0])
     assert resp.status_code == 201, resp.text
     chat = resp.json()
     assert chat["title"] is None and chat["message_count"] == 0
     assert chat["last_message_at"] == chat["created_at"]
 
-    assert [r["id"] for r in client.get("/conversations", headers=headers_for(users[0])).json()] == [chat["id"]]
-    detail = get_conversation(client, users[0], chat["id"]).json()
+    assert client.get("/conversations", headers=headers_for(users[0])).json() == []      # empty chats are not listed
+    detail = get_conversation(client, users[0], chat["id"]).json()                        # but it can be opened
     assert detail["messages"] == [] and detail["title"] is None
 
 
@@ -233,6 +239,7 @@ def test_the_first_question_names_an_untitled_chat_and_stores_citations(client, 
 def test_streaming_into_a_new_chat_names_it_too(client, users, use_llm):
     use_llm(make_streaming_llm())
     chat = create(client, users[0]).json()
+    attach_documents(chat["id"], users[0].id, CORPUS_DOCUMENTS[1])
     resp = client.post("/ask/stream", headers=headers_for(users[0]), json={"query": QUESTION, "conversation_id": chat["id"]})
     assert parse_events(resp.text)[-1][0] == "done"
     assert get_conversation(client, users[0], chat["id"]).json()["title"] == QUESTION
@@ -250,16 +257,16 @@ def test_a_title_given_or_set_by_renaming_is_never_replaced_by_a_question(client
     assert get_conversation(client, users[0], untitled["id"]).json()["title"] == "Renamed first"
 
 
-def test_empty_chats_sort_with_chats_that_have_messages(client, users, use_llm):
+def test_an_empty_chat_appears_in_the_list_once_it_gets_its_first_message(client, users, use_llm):
     use_llm(make_fake_llm(answer=ANSWER))
     alice = users[0]
     older = ask(client, alice)["conversation_id"]
     empty = create(client, alice).json()["id"]
     ids = lambda: [r["id"] for r in client.get("/conversations", headers=headers_for(alice)).json()]
 
-    assert ids() == [empty, older]
-    ask(client, alice, conversation_id=older)                       # new activity moves it back to the top
-    assert ids() == [older, empty]
+    assert ids() == [older]                                          # the empty chat is not listed
+    ask(client, alice, conversation_id=empty)
+    assert ids() == [empty, older]                                   # its first question puts it on top
 
 
 # --- rename ------------------------------------------------------------------------------------------
@@ -354,3 +361,149 @@ def test_delete_keeps_documents_and_long_term_memory(client, users, use_llm):
     assert [m.text for m in store.list_memories(alice.id)] == ["Works in the Berlin office"]     # the facts stay
     found = client.post("/retrieve", headers=headers_for(alice), json={"query": QUESTION}).json()["results"]
     assert found                                                                                  # documents still searchable
+
+
+# --- documents attached to a conversation, and abandoned empty chats ------------------------------------------
+
+
+@pytest.fixture
+def no_dispatch(monkeypatch):
+    """Uploads would hand the file to Celery; here that call does nothing."""
+    from app.worker.celery_app import celery_app
+
+    monkeypatch.setattr(celery_app, "send_task", lambda *_, **__: None)
+
+
+@pytest.fixture
+def no_vectors(monkeypatch):
+    """Deleting a document also deletes its Qdrant points; record the calls instead."""
+    import app.services.document as documents
+
+    deleted = []
+    monkeypatch.setattr(documents, "delete_document_points", deleted.append)
+    return deleted
+
+
+def upload(client, user, name, data, conversation_id=None):
+    form = {"conversation_id": str(conversation_id)} if conversation_id is not None else None
+    return client.post("/documents", headers=headers_for(user), data=form, files={"file": (name, data, "text/plain")})
+
+
+@pytest.mark.usefixtures("no_dispatch")
+def test_an_upload_with_a_conversation_id_is_attached_to_that_chat(client, users):
+    chat = create(client, users[0]).json()["id"]
+    doc = upload(client, users[0], "notes.txt", b"office opens at eight", chat).json()
+
+    listed = client.get(f"/conversations/{chat}/documents", headers=headers_for(users[0]))
+    assert listed.status_code == 200 and [d["id"] for d in listed.json()] == [doc["id"]]
+    assert listed.json()[0]["filename"] == "notes.txt"
+
+
+@pytest.mark.usefixtures("no_dispatch")
+def test_the_same_file_in_a_second_chat_attaches_the_existing_document(client, users, db):
+    from app.db.models import ConversationDocument
+
+    first, second = create(client, users[0]).json()["id"], create(client, users[0]).json()["id"]
+    a = upload(client, users[0], "notes.txt", b"same bytes", first).json()
+    b = upload(client, users[0], "notes.txt", b"same bytes", second).json()
+
+    assert a["id"] == b["id"]                                         # one document, two chats
+    links = {(link.conversation_id, link.uploaded_here) for link in db.query(ConversationDocument).all()}
+    assert links == {(first, True), (second, False)}                  # only the first chat created it
+
+
+@pytest.mark.usefixtures("no_dispatch")
+def test_uploading_into_someone_elses_chat_is_404_and_saves_nothing(client, users, db):
+    from app.db.models import Document
+
+    alices_chat = create(client, users[0]).json()["id"]
+    assert upload(client, users[1], "x.txt", b"bob", alices_chat).status_code == 404
+    assert upload(client, users[0], "x.txt", b"alice", 99999).status_code == 404
+    assert db.query(Document).count() == 0
+    assert client.get(f"/conversations/{alices_chat}/documents", headers=headers_for(users[1])).status_code == 404
+
+
+@pytest.mark.usefixtures("no_dispatch")
+def test_an_upload_without_a_conversation_id_is_attached_to_nothing(client, users, db):
+    from app.db.models import ConversationDocument
+
+    assert upload(client, users[0], "x.txt", b"library only").status_code == 201
+    assert db.query(ConversationDocument).count() == 0
+
+
+@pytest.mark.usefixtures("no_dispatch")
+def test_deleting_a_document_removes_it_from_its_chats(client, users, db, no_vectors):
+    from app.db.models import ConversationDocument
+
+    chat = create(client, users[0]).json()["id"]
+    doc = upload(client, users[0], "x.txt", b"bytes", chat).json()
+    assert client.delete(f"/documents/{doc['id']}", headers=headers_for(users[0])).status_code == 204
+    assert db.query(ConversationDocument).count() == 0
+    assert client.get(f"/conversations/{chat}/documents", headers=headers_for(users[0])).json() == []
+
+
+@pytest.mark.usefixtures("no_dispatch")
+def test_deleting_a_chat_keeps_its_documents(client, users, db, use_llm):
+    from app.db.models import ConversationDocument, Document
+
+    use_llm(make_fake_llm(answer=ANSWER))
+    chat = create(client, users[0]).json()["id"]
+    upload(client, users[0], "x.txt", b"bytes", chat)
+    ask(client, users[0], conversation_id=chat)
+    assert client.delete(f"/conversations/{chat}", headers=headers_for(users[0])).status_code == 204
+    assert db.query(Document).count() == 3                          # x.txt + the two corpus rows the helper added
+    assert db.query(ConversationDocument).count() == 0
+
+
+@pytest.mark.usefixtures("no_dispatch")
+def test_discarding_an_empty_chat_deletes_it_with_the_files_uploaded_only_into_it(client, users, db, no_vectors):
+    from app.db.models import Conversation, Document
+
+    used = create(client, users[0]).json()["id"]
+    shared = upload(client, users[0], "shared.txt", b"in two chats", used).json()
+    library = upload(client, users[0], "library.txt", b"uploaded before, no chat").json()
+
+    empty = create(client, users[0]).json()["id"]
+    own = upload(client, users[0], "own.txt", b"only here", empty).json()
+    upload(client, users[0], "shared.txt", b"in two chats", empty)          # attaches the existing one
+    upload(client, users[0], "library.txt", b"uploaded before, no chat", empty)
+
+    assert client.post(f"/conversations/{empty}/discard", headers=headers_for(users[0])).status_code == 204
+
+    assert db.get(Conversation, empty) is None
+    remaining = {d.id for d in db.query(Document).all()}
+    assert own["id"] not in remaining                                         # created in that chat: gone
+    assert {shared["id"], library["id"]} <= remaining                         # used elsewhere / already in library: kept
+    assert no_vectors == [own["id"]]                                          # its search vectors were deleted too
+
+
+def test_a_chat_with_messages_can_never_be_discarded(client, users, use_llm, db):
+    use_llm(make_fake_llm(answer=ANSWER))
+    chat = ask(client, users[0])["conversation_id"]
+    resp = client.post(f"/conversations/{chat}/discard", headers=headers_for(users[0]))
+    assert resp.status_code == 409
+    assert get_conversation(client, users[0], chat).status_code == 200
+    assert client.post(f"/conversations/{chat}/discard", headers=headers_for(users[1])).status_code == 404
+
+
+@pytest.mark.usefixtures("no_dispatch")
+def test_old_empty_chats_are_swept_away_with_their_own_files(client, users, db, no_vectors, use_llm):
+    from datetime import datetime, timedelta
+
+    from app.db.models import Conversation, Document
+    from app.services.conversations import ABANDONED_AFTER
+
+    use_llm(make_fake_llm(answer=ANSWER))
+    stale = create(client, users[0]).json()["id"]
+    fresh = create(client, users[0]).json()["id"]
+    used = ask(client, users[0])["conversation_id"]
+    stale_doc = upload(client, users[0], "stale.txt", b"left behind", stale).json()
+    db.query(Conversation).filter_by(id=stale).update({"created_at": datetime.utcnow() - ABANDONED_AFTER - timedelta(minutes=1)})
+    db.commit()
+
+    listed = client.get("/conversations", headers=headers_for(users[0])).json()       # the list request sweeps
+
+    assert [c["id"] for c in listed] == [used]
+    db.expire_all()
+    assert db.get(Conversation, stale) is None and db.get(Document, stale_doc["id"]) is None
+    assert db.get(Conversation, fresh) is not None                                     # recent empty chat: kept for now

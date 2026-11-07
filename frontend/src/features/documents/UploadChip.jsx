@@ -4,6 +4,21 @@ import { fileTypeLabel } from '../../lib/files'
 // Plain text only (file names come from the user's disk and are never treated as HTML).
 export default function UploadChip({ item, onRemove }) {
   const { status } = item
+
+  // processed (or being removed): just the file, no status line
+  if (status === 'ready' || (status === 'deleting' && !item.error)) {
+    return (
+      <li
+        className={`flex max-w-64 items-center gap-1.5 rounded-lg bg-surface py-1 pl-1.5 pr-1 text-xs ring-1 ring-stone-200 transition-opacity ${status === 'deleting' ? 'opacity-50' : ''}`}
+      >
+        <span className="shrink-0 rounded bg-stone-100 px-1 py-0.5 text-[9px] font-bold text-stone-700">{fileTypeLabel(item.name)}</span>
+        <span className="truncate font-medium text-ink" title={item.name}>
+          {item.name}
+        </span>
+        <RemoveButton item={item} onRemove={onRemove} />
+      </li>
+    )
+  }
   const bad = status === 'failed' || status === 'error' || status === 'rejected'
 
   let line
@@ -43,17 +58,7 @@ export default function UploadChip({ item, onRemove }) {
           <span className="line-clamp-2">{line}</span>
         </span>
       </span>
-      <button
-        type="button"
-        aria-label={`Remove ${item.name} from this list`}
-        title={status === 'uploading' ? 'Hide (the upload continues)' : 'Hide'}
-        onClick={() => onRemove(item.key)}
-        className="grid size-5 shrink-0 place-items-center rounded text-stone-600 hover:bg-stone-100 hover:text-ink focus-visible:outline-2 focus-visible:outline-brand-700"
-      >
-        <svg viewBox="0 0 20 20" className="size-3" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-          <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
-        </svg>
-      </button>
+      <RemoveButton item={item} onRemove={onRemove} />
 
       {/* the upload progress bar along the bottom edge */}
       {status === 'uploading' && (
@@ -62,5 +67,35 @@ export default function UploadChip({ item, onRemove }) {
         </span>
       )}
     </li>
+  )
+}
+
+// The X: removes the document from your library (or cancels an upload still on its way, or dismisses a refused file).
+function RemoveButton({ item, onRemove }) {
+  if (item.status === 'deleting') {
+    return (
+      <svg className="mx-1 size-3 shrink-0 animate-spin text-stone-600" viewBox="0 0 24 24" fill="none" role="status" aria-label="Removing">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+      </svg>
+    )
+  }
+  const label = item.documentId
+    ? `Remove ${item.name} from your library`
+    : item.status === 'uploading'
+      ? `Cancel the upload of ${item.name}`
+      : `Dismiss ${item.name}`
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={item.documentId ? 'Remove from your library' : item.status === 'uploading' ? 'Cancel upload' : 'Dismiss'}
+      onClick={() => onRemove(item.key)}
+      className="grid size-5 shrink-0 place-items-center rounded text-stone-600 hover:bg-stone-100 hover:text-ink focus-visible:outline-2 focus-visible:outline-brand-700"
+    >
+      <svg viewBox="0 0 20 20" className="size-3" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+        <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+      </svg>
+    </button>
   )
 }

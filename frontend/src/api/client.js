@@ -5,8 +5,16 @@ import { toApiError } from './errors'
 // The Clerk session token. Clerk puts itself on window.Clerk once it has loaded; the signed-in pages only
 // render after that (see auth/RequireAuth.jsx), so no request starts without it. getToken() returns a cached
 // token and refreshes it by itself when it is about to expire.
+let lastToken = null
+
 export async function getAuthToken() {
-  return (await window.Clerk?.session?.getToken()) ?? null
+  lastToken = (await window.Clerk?.session?.getToken()) ?? null
+  return lastToken
+}
+
+// The token used by the most recent request, without waiting (for a request sent while the page closes).
+export function peekAuthToken() {
+  return lastToken
 }
 
 // One axios instance for every JSON, upload and delete call. (The streaming chat call uses fetch: see api/askStream.js.)

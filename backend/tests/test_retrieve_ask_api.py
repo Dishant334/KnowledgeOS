@@ -14,7 +14,7 @@ import pytest
 
 from app.db.models import Conversation, Message, User
 from app.generation.llm import get_llm
-from tests.conftest import auth_header, make_fake_llm, make_token, unique_clerk_id
+from tests.conftest import CORPUS_DOCUMENTS, auth_header, chat_with_documents, make_fake_llm, make_token, unique_clerk_id
 
 
 @pytest.fixture
@@ -33,6 +33,11 @@ def users(db, retrieval_corpus):
 
 def headers_for(user):
     return auth_header(make_token(user.clerk_user_id))
+
+
+def chat(user):
+    """A new conversation of the user with their corpus documents attached (questions only search those)."""
+    return chat_with_documents(user.id, CORPUS_DOCUMENTS.get(user.id, []))
 
 
 @pytest.fixture
@@ -153,7 +158,7 @@ def test_ask_without_configured_llm_is_503(client, users):
 
 def test_ask_answers_with_citations_and_saves_the_turn(client, users, use_llm, db):
     use_llm(make_fake_llm(answer="Employees get twenty days of paid vacation [1]."))
-    resp = client.post("/ask", headers=headers_for(users[0]), json={"query": "How many vacation days do employees get?"})
+    resp = client.post("/ask", headers=headers_for(users[0]), json={"query": "How many vacation days do employees get?", "conversation_id": chat(users[0])})
     assert resp.status_code == 200, resp.text
     body = resp.json()
 
@@ -177,7 +182,8 @@ def test_ask_follow_up_uses_conversation_history(client, users, use_llm):
     use_llm(make_fake_llm(answer="Twenty days [1].", rewritten="How many vacation days do employees get?", calls=calls))
     headers = headers_for(users[0])
 
-    first = client.post("/ask", headers=headers, json={"query": "How many vacation days do employees get?"}).json()
+    first = client.post("/ask", headers=headers, json={"query": "How many vacation days do employees get?",
+                                                      "conversation_id": chat(users[0])}).json()
     calls.clear()
     second = client.post("/ask", headers=headers,
                          json={"query": "and in total per month?", "conversation_id": first["conversation_id"]})
@@ -193,11 +199,12 @@ def test_ask_follow_up_uses_conversation_history(client, users, use_llm):
 def test_ask_abstains_without_calling_the_llm_when_nothing_is_found(client, users, use_llm, db):
     calls = []
     use_llm(make_fake_llm(calls=calls))
-    stranger = User(clerk_user_id=unique_clerk_id(), email="c@example.com")   # has no documents
+    stranger = User(clerk_user_id=unique_clerk_id(), email="c@example.com")
     db.add(stranger)
     db.commit()
+    empty_chat = chat_with_documents(stranger.id, [999])     # a document with no indexed text: the search finds nothing
 
-    resp = client.post("/ask", headers=headers_for(stranger), json={"query": "How many vacation days?"})
+    resp = client.post("/ask", headers=headers_for(stranger), json={"query": "How many vacation days?", "conversation_id": empty_chat})
 
     assert resp.status_code == 200
     body = resp.json()
@@ -210,7 +217,8 @@ def test_ask_abstains_without_calling_the_llm_when_nothing_is_found(client, user
 
 def test_ask_abstention_from_the_model_has_no_citations(client, users, use_llm):
     use_llm(make_fake_llm(answer="I don't have enough information to answer that."))
-    body = client.post("/ask", headers=headers_for(users[0]), json={"query": "What is the CEO's salary?"}).json()
+    body = client.post("/ask", headers=headers_for(users[0]),
+                       json={"query": "What is the CEO's salary?", "conversation_id": chat(users[0])}).json()
     assert body["abstained"] is True and body["citations"] == []
 
 
@@ -218,7 +226,7 @@ def test_ask_cannot_use_another_users_conversation(client, users, use_llm, db):
     use_llm(make_fake_llm())
     alice, bob = users
     conversation_id = client.post("/ask", headers=headers_for(alice),
-                                  json={"query": "vacation days?"}).json()["conversation_id"]
+                                  json={"query": "vacation days?", "conversation_id": chat(alice)}).json()["conversation_id"]
 
     resp = client.post("/ask", headers=headers_for(bob),
                        json={"query": "vacation days?", "conversation_id": conversation_id})
@@ -228,7 +236,8 @@ def test_ask_cannot_use_another_users_conversation(client, users, use_llm, db):
 
 def test_ask_never_cites_other_users_documents(client, users, use_llm):
     use_llm(make_fake_llm(answer="See [1] and [2]."))
-    body = client.post("/ask", headers=headers_for(users[1]), json={"query": "vacation salary Berlin"}).json()
+    body = client.post("/ask", headers=headers_for(users[1]),
+                       json={"query": "vacation salary Berlin", "conversation_id": chat(users[1])}).json()
     assert {c["document_id"] for c in body["citations"]} == {20}
 
 
@@ -239,11 +248,11 @@ def test_ask_llm_failure_is_502_and_saves_nothing(client, users, use_llm, db):
         raise RuntimeError("provider exploded")
 
     use_llm(RunnableLambda(fail))
-    resp = client.post("/ask", headers=headers_for(users[0]), json={"query": "How many vacation days?"})
+    resp = client.post("/ask", headers=headers_for(users[0]), json={"query": "How many vacation days?", "conversation_id": chat(users[0])})
 
     assert resp.status_code == 502
     assert "exploded" not in resp.text
-    assert db.query(Conversation).count() == 0 and db.query(Message).count() == 0
+    assert db.query(Conversation).count() == 1 and db.query(Message).count() == 0     # only the chat made above
 
 
 def test_ask_quota_exhausted_is_429_with_a_friendly_message(client, users, use_llm, db):
@@ -253,12 +262,12 @@ def test_ask_quota_exhausted_is_429_with_a_friendly_message(client, users, use_l
         raise RuntimeError("429 RESOURCE_EXHAUSTED quota exceeded for key AIza-secret-123")
 
     use_llm(RunnableLambda(quota))
-    resp = client.post("/ask", headers=headers_for(users[0]), json={"query": "How many vacation days?"})
+    resp = client.post("/ask", headers=headers_for(users[0]), json={"query": "How many vacation days?", "conversation_id": chat(users[0])})
 
     assert resp.status_code == 429
     assert "try again later" in resp.json()["detail"]
     assert "AIza-secret-123" not in resp.text            # provider error text never reaches the client
-    assert db.query(Conversation).count() == 0 and db.query(Message).count() == 0
+    assert db.query(Message).count() == 0
 
 
 def test_ask_uses_the_local_fallback_when_the_cloud_model_fails(client, users, use_llm):
@@ -271,7 +280,8 @@ def test_ask_uses_the_local_fallback_when_the_cloud_model_fails(client, users, u
     local = make_fake_llm(answer="Employees get twenty days of paid vacation [1].")
     use_llm(RunnableLambda(cloud_down).with_fallbacks([local]))
 
-    resp = client.post("/ask", headers=headers_for(users[0]), json={"query": "How many vacation days do employees get?"})
+    resp = client.post("/ask", headers=headers_for(users[0]),
+                       json={"query": "How many vacation days do employees get?", "conversation_id": chat(users[0])})
 
     assert resp.status_code == 200, resp.text
     assert resp.json()["answer"] == "Employees get twenty days of paid vacation [1]."
@@ -287,10 +297,10 @@ def test_ask_qdrant_outage_is_503_and_saves_nothing(client, users, use_llm, db, 
         raise ConnectionError("qdrant down")
 
     monkeypatch.setattr(service, "retrieve", down)
-    resp = client.post("/ask", headers=headers_for(users[0]), json={"query": "vacation?"})
+    resp = client.post("/ask", headers=headers_for(users[0]), json={"query": "vacation?", "conversation_id": chat(users[0])})
 
     assert resp.status_code == 503
-    assert db.query(Conversation).count() == 0 and db.query(Message).count() == 0
+    assert db.query(Message).count() == 0
 
 
 @pytest.mark.parametrize("payload", [{"query": ""}, {"query": "x" * 4001}, {"query": "x", "conversation_id": "abc"}])
@@ -310,15 +320,16 @@ def test_ask_end_to_end_with_real_qwen(client, users, use_llm):
         pytest.skip("Ollama or the model is not available")
     use_llm(build_llm("ollama"))
     headers = headers_for(users[0])
+    conversation_id = chat(users[0])
 
-    answer = client.post("/ask", headers=headers, json={"query": "How many vacation days do employees get?"})
+    answer = client.post("/ask", headers=headers, json={"query": "How many vacation days do employees get?", "conversation_id": conversation_id})
     assert answer.status_code == 200, answer.text
     body = answer.json()
     assert "twenty" in body["answer"].lower() or "20" in body["answer"]
     assert "[1]" in body["answer"] and "<think>" not in body["answer"]
     assert body["citations"][0]["document_id"] == 10 and body["abstained"] is False
 
-    refusal = client.post("/ask", headers=headers, json={"query": "What is the CEO's salary?"}).json()
+    refusal = client.post("/ask", headers=headers, json={"query": "What is the CEO's salary?", "conversation_id": conversation_id}).json()
     assert refusal["abstained"] is True and refusal["citations"] == []
 
 
@@ -332,7 +343,8 @@ def test_ask_multi_turn_conversation_with_real_qwen(client, users, use_llm, db):
     use_llm(build_llm("ollama"))
     headers = headers_for(users[1])
 
-    first = client.post("/ask", headers=headers, json={"query": "How many vacation days do Berlin employees get?"}).json()
+    first = client.post("/ask", headers=headers, json={"query": "How many vacation days do Berlin employees get?",
+                                                      "conversation_id": chat(users[1])}).json()
     assert "thirty" in first["answer"].lower() or "30" in first["answer"]
     assert {c["document_id"] for c in first["citations"]} == {20}
 
@@ -344,3 +356,57 @@ def test_ask_multi_turn_conversation_with_real_qwen(client, users, use_llm, db):
 
     saved = db.query(Message).filter_by(conversation_id=first["conversation_id"]).order_by(Message.id).all()
     assert [m.role for m in saved] == ["user", "assistant", "user", "assistant"]
+
+
+# --- documents belong to conversations ------------------------------------------------------------------------
+
+
+def test_a_question_only_searches_the_documents_of_its_own_conversation(client, users, use_llm):
+    use_llm(make_fake_llm(answer="See [1] and [2]."))
+    alice = users[0]
+    only_remote = chat_with_documents(alice.id, [11])          # Alice owns 10 and 11; this chat has only 11
+    body = client.post("/ask", headers=headers_for(alice),
+                       json={"query": "How many vacation days do employees get?", "conversation_id": only_remote}).json()
+    assert {c["document_id"] for c in body["citations"]} <= {11}
+    assert 10 not in {c["document_id"] for c in body["citations"]}
+
+
+@pytest.mark.parametrize("conversation", ["none", "empty chat"])
+def test_without_documents_a_real_question_asks_for_a_document_and_never_searches_or_calls_the_llm(
+        client, users, use_llm, db, monkeypatch, conversation):
+    import app.services.retrieve as service
+    from app.services.small_talk import NEED_DOCUMENT_REPLY
+
+    calls = []
+    use_llm(make_fake_llm(calls=calls))
+    monkeypatch.setattr(service, "retrieve", lambda *a, **k: pytest.fail("no search without documents"))
+    payload = {"query": "How many vacation days do employees get?"}
+    if conversation == "empty chat":
+        payload["conversation_id"] = chat_with_documents(users[0].id, [])
+
+    body = client.post("/ask", headers=headers_for(users[0]), json=payload).json()
+
+    assert body["answer"] == NEED_DOCUMENT_REPLY and body["abstained"] is True and body["citations"] == []
+    assert calls == []                                               # no LLM call at all
+    saved = db.query(Message).filter_by(conversation_id=body["conversation_id"]).order_by(Message.id).all()
+    assert [m.role for m in saved] == ["user", "assistant"]          # still a normal, saved turn
+
+
+@pytest.mark.parametrize("greeting", ["hi", "Hello!", "hey there", "good morning", "thanks", "who are you?"])
+def test_without_documents_small_talk_gets_a_hello(client, users, use_llm, greeting):
+    from app.services.small_talk import GREETING_REPLY
+
+    calls = []
+    use_llm(make_fake_llm(calls=calls))
+    body = client.post("/ask", headers=headers_for(users[0]), json={"query": greeting}).json()
+    assert body["answer"] == GREETING_REPLY and body["abstained"] is False and calls == []
+
+
+def test_small_talk_detection():
+    from app.services.small_talk import is_small_talk
+
+    for text in ["hi", "HI!!", "hii", "hello there", "Hey", "good evening", "thank you so much", "how are you?", "ok", "help"]:
+        assert is_small_talk(text), text
+    for text in ["hi, how many vacation days do I get?", "what is the leave policy", "hello world program in python",
+                 "summarise the report", "", "thanks for the budget numbers, what about Q3?"]:
+        assert not is_small_talk(text), text

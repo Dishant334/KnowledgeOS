@@ -1,4 +1,5 @@
 from fastapi import (
+    Form,
     APIRouter,
     Depends,
     File,
@@ -36,6 +37,7 @@ router = APIRouter(
 )
 async def upload_document(
     file: UploadFile = File(...),
+    conversation_id: int | None = Form(None),   # attach the file to this conversation (must be yours)
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -43,6 +45,7 @@ async def upload_document(
         db=db,
         user=current_user,
         file=file,
+        conversation_id=conversation_id,
     )
 
 

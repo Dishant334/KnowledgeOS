@@ -14,7 +14,8 @@ from langchain_core.runnables import RunnableGenerator
 from app.db.models import Conversation, Message, User
 from app.generation.llm import get_llm
 from tests.conftest import auth_header, make_fake_llm, make_token, unique_clerk_id
-from tests.test_retrieve_ask_api import headers_for, use_llm, users  # noqa: F401  (shared fixtures)
+from tests.conftest import chat_with_documents
+from tests.test_retrieve_ask_api import chat, headers_for, use_llm, users  # noqa: F401  (shared fixtures)
 
 QUESTION = "How many vacation days do employees get?"
 
@@ -57,6 +58,8 @@ def parse_events(text: str) -> list[tuple[str, dict]]:
 
 
 def stream(client, user, **payload):
+    """Streams QUESTION; without a conversation_id it asks into a new chat holding the user's corpus documents."""
+    payload.setdefault("conversation_id", chat(user))
     return client.post("/ask/stream", headers=headers_for(user), json={"query": QUESTION, **payload})
 
 
@@ -92,7 +95,7 @@ def test_stream_sends_tokens_then_done_and_saves_the_turn(client, users, use_llm
 
 def test_stream_done_matches_the_json_endpoint(client, users, use_llm):
     use_llm(make_streaming_llm("See twenty days [1] and more [2]."))
-    json_body = client.post("/ask", headers=headers_for(users[0]), json={"query": QUESTION}).json()
+    json_body = client.post("/ask", headers=headers_for(users[0]), json={"query": QUESTION, "conversation_id": chat(users[0])}).json()
     done = parse_events(stream(client, users[0]).text)[-1][1]
 
     for key in ("answer", "abstained", "citations"):
@@ -132,11 +135,12 @@ def test_stream_model_refusal_replaces_the_preview_and_has_no_citations(client, 
 def test_stream_nothing_found_refuses_without_calling_the_answer_prompt(client, users, use_llm, db):
     calls = []
     use_llm(make_fake_llm(calls=calls))
-    stranger = User(clerk_user_id=unique_clerk_id(), email="c@example.com")     # has no documents
+    stranger = User(clerk_user_id=unique_clerk_id(), email="c@example.com")
     db.add(stranger)
     db.commit()
 
-    events = parse_events(stream(client, stranger).text)
+    # a chat whose only document has no indexed text: the search finds nothing
+    events = parse_events(stream(client, stranger, conversation_id=chat_with_documents(stranger.id, [999])).text)
 
     assert [kind for kind, _ in events] == ["token", "done"]
     assert events[-1][1]["abstained"] is True and events[-1][1]["answer"].startswith("I don't have enough information")
@@ -149,7 +153,7 @@ def test_stream_llm_failure_before_the_first_token_is_502_and_saves_nothing(clie
 
     assert resp.status_code == 502
     assert "exploded" not in resp.text
-    assert db.query(Conversation).count() == 0 and db.query(Message).count() == 0
+    assert db.query(Message).count() == 0     # the chat made by stream() exists, but nothing was saved into it
 
 
 def test_stream_quota_error_is_429_with_a_friendly_message(client, users, use_llm, db):
@@ -163,7 +167,7 @@ def test_stream_quota_error_is_429_with_a_friendly_message(client, users, use_ll
 
     assert resp.status_code == 429 and "try again later" in resp.json()["detail"]
     assert "AIza-secret-123" not in resp.text
-    assert db.query(Conversation).count() == 0 and db.query(Message).count() == 0
+    assert db.query(Message).count() == 0     # the chat made by stream() exists, but nothing was saved into it
 
 
 def test_stream_failure_halfway_sends_an_error_event_and_saves_nothing(client, users, use_llm, db):
@@ -176,10 +180,20 @@ def test_stream_failure_halfway_sends_an_error_event_and_saves_nothing(client, u
     assert kinds[-1] == "error" and "done" not in kinds and kinds.count("token") >= 1
     assert events[-1][1]["status"] == 502
     assert "exploded" not in resp.text
-    assert db.query(Conversation).count() == 0 and db.query(Message).count() == 0
+    assert db.query(Message).count() == 0     # the chat made by stream() exists, but nothing was saved into it
 
 
 @pytest.mark.parametrize("payload", [{"query": ""}, {"query": "x" * 4001}, {}])
 def test_stream_validates_input(client, users, use_llm, payload):
     use_llm(make_streaming_llm())
     assert client.post("/ask/stream", headers=headers_for(users[0]), json=payload).status_code == 422
+
+
+def test_stream_without_documents_sends_the_fixed_reply_as_one_token(client, users, use_llm):
+    from app.services.small_talk import NEED_DOCUMENT_REPLY
+
+    calls = []
+    use_llm(make_fake_llm(calls=calls))
+    events = parse_events(stream(client, users[0], conversation_id=chat_with_documents(users[0].id, [])).text)
+    assert events == [("token", {"text": NEED_DOCUMENT_REPLY}), ("done", events[-1][1])]
+    assert events[-1][1]["answer"] == NEED_DOCUMENT_REPLY and calls == []

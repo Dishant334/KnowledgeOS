@@ -22,7 +22,7 @@ from app.memory import store
 from app.memory.consolidate import MEMORY_PROMPT, parse_memory_list, update_long_term_memory
 from app.memory.store import MAX_MEMORIES_PER_USER, MAX_MEMORY_CHARS, clean_memory_text
 from app.services.ask import _history_as_text
-from tests.conftest import auth_header, make_fake_llm, make_token, unique_clerk_id
+from tests.conftest import CORPUS_DOCUMENTS, attach_documents, auth_header, chat_with_documents, make_fake_llm, make_token, unique_clerk_id
 from tests.test_llm import needs_ollama
 from tests.test_retrieve_ask_api import headers_for, use_llm, users  # noqa: F401  (fixtures)
 
@@ -336,10 +336,12 @@ def prompts(calls, marker):
 
 
 def ask(client, user, text, conversation_id=None):
-    body = {"query": text}
+    """Asks into the given conversation (the user's corpus documents attached) or into a NEW chat with them."""
     if conversation_id:
-        body["conversation_id"] = conversation_id
-    return client.post("/ask", headers=headers_for(user), json=body)
+        attach_documents(conversation_id, user.id, CORPUS_DOCUMENTS[user.id])
+    else:
+        conversation_id = chat_with_documents(user.id, CORPUS_DOCUMENTS[user.id])
+    return client.post("/ask", headers=headers_for(user), json={"query": text, "conversation_id": conversation_id})
 
 
 def seed_long_conversation(db, user):

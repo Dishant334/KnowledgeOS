@@ -18,7 +18,7 @@ from app.generation.orchestrator import generate_answer
 from app.retrieval.orchestrator import retrieve
 from app.schemas.ask import AskRequest
 from app.services.ask import ask_question
-from tests.conftest import BACKEND_DIR, make_fake_llm
+from tests.conftest import BACKEND_DIR, CORPUS_DOCUMENTS, chat_with_documents, make_fake_llm
 from tests.test_retrieve_ask_api import users  # noqa: F401  (fixture)
 from tests.test_retrieval_units import chunk
 
@@ -142,11 +142,12 @@ def test_retrieval_trace_shows_the_retrieved_chunks_scores_and_stages(recorder, 
 
 def test_ask_trace_covers_the_whole_request_without_leaking_internals(recorder, users, db):  # noqa: F811
     llm = make_fake_llm(answer="Employees get twenty days of paid vacation [1].")
+    chat = chat_with_documents(users[0].id, CORPUS_DOCUMENTS[1])
     with recorder.tracing():
-        response = ask_question(db, users[0].id, AskRequest(query="How many vacation days do employees get?"), llm)
+        response = ask_question(db, users[0].id, AskRequest(query="How many vacation days do employees get?", conversation_id=chat), llm)
 
     [root] = recorder.by_name("ask")
-    assert root["inputs"] == {"question": "How many vacation days do employees get?", "conversation_id": None}
+    assert root["inputs"] == {"question": "How many vacation days do employees get?", "conversation_id": chat}
     assert root["outputs"]["answer"] == response.answer and root["outputs"]["citations"] == 1
     below = {r["name"] for r in recorder.children_of(root)}
     assert {"retrieve", "generate_answer"} <= below                                           # the pipeline stages hang off the request

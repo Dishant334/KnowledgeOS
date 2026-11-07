@@ -20,7 +20,9 @@ from app.generation.summary import format_messages, split_for_summary, summarize
 from app.memory.consolidate import update_long_term_memory
 from app.memory.store import list_memories
 from app.schemas.ask import AskRequest, AskResponse, Citation
+from app.services.conversations import conversation_document_ids
 from app.services.retrieve import run_retrieval
+from app.services.small_talk import reply_without_documents
 
 logger = logging.getLogger(__name__)
 
@@ -124,12 +126,59 @@ def _remember_important_facts(user_id: int, conversation: Conversation, llm) -> 
         logger.warning("Could not update long-term memory for user %s", user_id, exc_info=True)
 
 
+def _save_turn(
+    db: Session,
+    user_id: int,
+    conversation: Conversation | None,
+    question: str,
+    answer: str,
+    citations: list[Citation],
+    abstained: bool,
+) -> AskResponse:
+    """Saves the question and the answer (creating the conversation if needed) and returns the response."""
+    if conversation is None:
+        conversation = Conversation(user_id=user_id, title=question[:80])
+        db.add(conversation)
+        db.flush()  # gives the conversation an id
+
+    if conversation.title is None:
+        # a chat started with "New chat" has no title yet: the first question names it
+        # (a title given at creation, or set by renaming, is never replaced)
+        conversation.title = question[:80]
+
+    db.add(Message(conversation_id=conversation.id, role="user", content=question))
+    # The citations are saved with the answer (same shape as in the response), so the conversation
+    # can be shown again later, source cards included.
+    assistant_message = Message(
+        conversation_id=conversation.id,
+        role="assistant",
+        content=answer,
+        citations=[citation.model_dump() for citation in citations],
+    )
+    db.add(assistant_message)
+    db.commit()
+    db.refresh(assistant_message)
+
+    return AskResponse(
+        conversation_id=conversation.id,
+        message_id=assistant_message.id,
+        answer=answer,
+        citations=citations,
+        abstained=abstained,
+        created_at=assistant_message.created_at,
+    )
+
+
 def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[tuple[str, object]]:
     """
     retrieve -> build cited context -> generate answer -> save the turn, as a stream of events:
 
         ("token", "text piece") ...   the answer as the model writes it
         ("done", AskResponse)         once, after the turn is saved (the answer in it is the one to trust)
+
+    ONLY the conversation's own documents are searched (conversation_documents). A conversation without documents
+    (or a question with no conversation id: a new chat has none yet) gets a fixed reply instead, with no search and
+    no LLM call: a hello for small talk, otherwise "add a document to this chat first" (abstained).
 
     Nothing is saved if retrieval or the LLM fails, so the client can simply retry. Problems are
     raised as before: LookupError (unknown conversation), HTTPException 429 / 502. Before the first
@@ -145,11 +194,19 @@ def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[
         unsummarized = [(role, content) for _, role, content in _load_unsummarized(db, conversation)]
         history = trim_history(unsummarized)  # safety net only: normally already small thanks to the summary
 
+    document_ids = conversation_document_ids(db, conversation.id) if conversation is not None else []
+    if not document_ids:
+        reply, abstained = reply_without_documents(request.query)
+        yield "token", reply
+        yield "done", _save_turn(db, user_id, conversation, request.query, reply, [], abstained)
+        return
+
     retrieval = run_retrieval(
         request.query,
         user_id=user_id,
         llm=llm,
         history=_history_as_text(summary, history, memories),
+        document_ids=document_ids,
     )
 
     generation = None
@@ -168,39 +225,9 @@ def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[
             )
         raise HTTPException(status_code=502, detail="The language model request failed, please try again")
 
-    if conversation is None:
-        conversation = Conversation(user_id=user_id, title=request.query[:80])
-        db.add(conversation)
-        db.flush()  # gives the conversation an id
-
-    if conversation.title is None:
-        # a chat started with "New chat" has no title yet: the first question names it
-        # (a title given at creation, or set by renaming, is never replaced)
-        conversation.title = request.query[:80]
-
     citations = [Citation(**asdict(citation)) for citation in generation.citations]
-
-    db.add(Message(conversation_id=conversation.id, role="user", content=request.query))
-    # The citations are saved with the answer (same shape as in the response), so the conversation
-    # can be shown again later, source cards included.
-    assistant_message = Message(
-        conversation_id=conversation.id,
-        role="assistant",
-        content=generation.answer,
-        citations=[citation.model_dump() for citation in citations],
-    )
-    db.add(assistant_message)
-    db.commit()
-    db.refresh(assistant_message)
-
-    response = AskResponse(
-        conversation_id=conversation.id,
-        message_id=assistant_message.id,
-        answer=generation.answer,
-        citations=citations,
-        abstained=generation.abstained,
-        created_at=assistant_message.created_at,
-    )
+    response = _save_turn(db, user_id, conversation, request.query, generation.answer, citations, generation.abstained)
+    conversation = db.get(Conversation, response.conversation_id)
     yield "done", response
 
     # The answer is already saved and sent, so a problem here must never fail the request.

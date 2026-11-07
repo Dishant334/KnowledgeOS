@@ -19,7 +19,7 @@ from app.generation.orchestrator import (
 )
 from app.generation.summary import SUMMARY_MAX_WORDS, format_messages, split_for_summary, summarize
 from app.services.ask import _history_as_text
-from tests.conftest import make_fake_llm
+from tests.conftest import CORPUS_DOCUMENTS, attach_documents, make_fake_llm
 from tests.test_llm import needs_ollama
 # fixtures used below (users, use_llm) and helper
 from tests.test_retrieve_ask_api import headers_for, use_llm, users  # noqa: F401
@@ -120,6 +120,8 @@ def seed(db, user, labels, n=400):
 
 
 def ask(client, user, text, conversation_id):
+    # questions only search the conversation's own documents: attach the user's corpus documents (idempotent)
+    attach_documents(conversation_id, user.id, CORPUS_DOCUMENTS[user.id])
     return client.post("/ask", headers=headers_for(user), json={"query": text, "conversation_id": conversation_id})
 
 

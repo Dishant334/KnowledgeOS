@@ -9,7 +9,7 @@ const NEAR_BOTTOM_PX = 120
 //    jump button appears), but your own new question always scrolls to the end;
 //  - it opens a conversation at the newest message;
 //  - a round "jump to latest" button shows while you are scrolled up.
-export default function MessageList({ messages, active, onOpen }) {
+export default function MessageList({ messages, active, onOpen, onRetry }) {
   const scroller = useRef(null)
   const nearBottom = useRef(true)
   const [showJump, setShowJump] = useState(false)
@@ -28,6 +28,12 @@ export default function MessageList({ messages, active, onOpen }) {
     if (nearBottom.current || last?.role === 'user') scrollToEnd(true)
   }, [messages.length, last?.role])
 
+  // an answer streaming in: keep the newest words in view, unless you scrolled up to read
+  const growing = last?.status === 'streaming' ? last.content.length : 0
+  useEffect(() => {
+    if (growing && nearBottom.current) scrollToEnd(false)
+  }, [growing])
+
   const onScroll = () => {
     const el = scroller.current
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight
@@ -42,13 +48,14 @@ export default function MessageList({ messages, active, onOpen }) {
         onScroll={onScroll}
         className="h-full overflow-y-auto overflow-x-hidden [scrollbar-color:var(--color-stone-300)_transparent] [scrollbar-width:thin]"
       >
-        <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-6 [overflow-wrap:anywhere] @max-[960px]:pr-20">
+        <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-6 [overflow-wrap:anywhere] @max-[960px]:pr-28">
           {messages.map((m) => (
             <MessageBubble
               key={m.id}
               message={m}
               activeN={active?.messageId === m.id ? active.n : null}
               onOpen={onOpen}
+              onRetry={onRetry}
             />
           ))}
         </div>

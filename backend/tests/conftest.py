@@ -332,3 +332,54 @@ def make_fake_llm(answer="Employees get twenty days of paid vacation [1].", rewr
         return answer
 
     return RunnableLambda(fake)
+
+
+# --- conversations with documents ----------------------------------------------------------------------------
+# A question only searches the documents attached to its conversation (conversation_documents). Many tests index
+# chunks straight into Qdrant without a `documents` row, so these helpers create a minimal row for each id when it is
+# missing. They open their own session, so test helpers that only receive (client, user) can call them.
+
+
+def attach_documents(conversation_id: int, user_id: int, document_ids) -> None:
+    """Attaches documents (creating minimal `documents` rows for ids that have none) to an existing conversation."""
+    from sqlalchemy import text
+    from sqlalchemy.dialects.postgresql import insert
+
+    from app.db.database import SessionLocal
+    from app.db.models import ConversationDocument, Document
+
+    with SessionLocal() as session:
+        for document_id in document_ids:
+            document_id = int(document_id)
+            if session.get(Document, document_id) is None:
+                session.add(Document(
+                    id=document_id, user_id=user_id, filename=f"doc{document_id}", mime_type="text/plain",
+                    file_size=1, status="ready", document_hash=f"test-{document_id}", storage_key=f"test-{document_id}",
+                ))
+                session.flush()
+            session.execute(
+                insert(ConversationDocument)
+                .values(conversation_id=conversation_id, document_id=document_id, uploaded_here=False)
+                .on_conflict_do_nothing()
+            )
+        # rows inserted with explicit ids: move the id counter past them, so later uploads get fresh ids
+        session.execute(text("SELECT setval('documents_id_seq', GREATEST((SELECT COALESCE(MAX(id), 1) FROM documents), 1))"))
+        session.commit()
+
+
+def chat_with_documents(user_id: int, document_ids) -> int:
+    """A new (untitled) conversation of the user with these documents attached; returns its id."""
+    from app.db.database import SessionLocal
+    from app.db.models import Conversation
+
+    with SessionLocal() as session:
+        conversation = Conversation(user_id=user_id)
+        session.add(conversation)
+        session.commit()
+        conversation_id = conversation.id
+    attach_documents(conversation_id, user_id, document_ids)
+    return conversation_id
+
+
+# which documents each user owns in the shared retrieval corpus (CORPUS above)
+CORPUS_DOCUMENTS = {1: [10, 11], 2: [20]}

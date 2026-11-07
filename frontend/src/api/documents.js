@@ -4,12 +4,14 @@ import { api } from './client'
 // { id, filename, mime_type, file_size, status: 'pending'|'processing'|'ready'|'failed', created_at, updated_at,
 //   failure_reason: null | "a friendly reason (only when failed)" }
 
-// Upload one file (multipart). onProgress(fraction 0..1) follows the bytes sent. No timeout: a 20 MB file on a slow
+// Upload one file (multipart), attached to a conversation when conversationId is given (questions in a conversation
+// search only its documents). onProgress(fraction 0..1) follows the bytes sent. No timeout: a 20 MB file on a slow
 // connection can take longer than the client's default 30 s. Returns the document (an existing one if you already
 // uploaded the same file: the backend de-duplicates per user).
-export async function uploadDocument(file, { onProgress, signal } = {}) {
+export async function uploadDocument(file, { conversationId, onProgress, signal } = {}) {
   const form = new FormData()
   form.append('file', file)
+  if (conversationId != null) form.append('conversation_id', String(conversationId))
   const { data } = await api.post('/documents', form, {
     timeout: 0,
     signal,

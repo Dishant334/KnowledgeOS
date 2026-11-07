@@ -18,9 +18,7 @@ export default function CitationPanel({ citation, others, onClose, onSwitch }) {
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-stone-600">Source {citation.n}</p>
           <h2 className="mt-1 truncate font-display text-lg font-semibold text-ink">{citation.filename}</h2>
-          <p className="text-sm text-stone-600">
-            {citation.page ? `Page ${citation.page}` : citation.section ?? 'Document'}
-          </p>
+          {citation.location && <p className="text-sm text-stone-600">{citation.location}</p>}
         </div>
         <button
           type="button"
@@ -37,7 +35,7 @@ export default function CitationPanel({ citation, others, onClose, onSwitch }) {
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600">Passage</p>
         <blockquote className="whitespace-pre-wrap rounded-r-lg border-l-4 border-highlight bg-highlight/15 p-3 text-sm leading-6 text-ink">
-          {citation.snippet}
+          {citation.snippet || 'The passage is not available for this answer.'}
         </blockquote>
       </div>
 

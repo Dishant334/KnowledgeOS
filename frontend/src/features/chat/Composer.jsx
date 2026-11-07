@@ -6,7 +6,8 @@ import UploadChip from '../documents/UploadChip'
 // The question box: a rounded card that grows with the text (up to 6 lines) and a round send button.
 // The paperclip uploads documents (see features/documents/useUploads.js, owned by ChatLayout so uploads keep going when
 // the box moves from the middle to the bottom); each file shows as a chip above the box with its live status.
-export default function Composer({ value, onChange, onSubmit, uploads }) {
+// While an answer is being written (`busy`) the send button becomes a Stop button and Enter does not send.
+export default function Composer({ value, onChange, onSubmit, uploads, busy = false, onStop }) {
   const input = useRef(null)
   const field = useRef(null)
 
@@ -15,7 +16,7 @@ export default function Composer({ value, onChange, onSubmit, uploads }) {
       {uploads?.items.length > 0 && (
         <ul className="mb-2 flex flex-wrap gap-2 text-left" aria-label="Files being added">
           {uploads.items.map((item) => (
-            <UploadChip key={item.key} item={item} onRemove={uploads.remove} />
+            <UploadChip key={item.key} item={item} onRemove={uploads.discard} />
           ))}
         </ul>
       )}
@@ -31,7 +32,7 @@ export default function Composer({ value, onChange, onSubmit, uploads }) {
           }}
           onSubmit={(e) => {
             e.preventDefault()
-            if (value.trim()) onSubmit(value.trim())
+            if (value.trim() && !busy) onSubmit(value.trim())
           }}
           className="relative flex items-end gap-2 rounded-2xl bg-surface p-2 shadow-sm ring-1 ring-stone-300 transition focus-within:ring-transparent"
         >
@@ -65,24 +66,36 @@ export default function Composer({ value, onChange, onSubmit, uploads }) {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
-                if (value.trim()) onSubmit(value.trim())
+                if (value.trim() && !busy) onSubmit(value.trim())
               }
             }}
             placeholder="Ask about your documents..."
             aria-label="Your question"
             className="max-h-36 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-ink placeholder:text-stone-500 focus:outline-none [field-sizing:content]"
           />
-          <button
-            type="submit"
-            disabled={!value.trim()}
-            aria-label="Send question"
-            onPointerDown={(e) => ripple(e.currentTarget, e.clientX, e.clientY)}
-            className="relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-brand-700 text-white transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-40 motion-safe:enabled:active:scale-95"
-          >
-            <svg viewBox="0 0 20 20" fill="currentColor" className="size-5" aria-hidden="true">
-              <path d="M10 3.5l6 6-1.4 1.4-3.6-3.6V16.5H9V7.3L5.4 10.9 4 9.5l6-6z" />
-            </svg>
-          </button>
+          {busy ? (
+            <button
+              type="button"
+              onClick={onStop}
+              aria-label="Stop the answer"
+              title="Stop"
+              className="relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-ink text-paper transition hover:opacity-90 motion-safe:active:scale-95"
+            >
+              <span className="size-3 rounded-sm bg-current" aria-hidden="true" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!value.trim()}
+              aria-label="Send question"
+              onPointerDown={(e) => ripple(e.currentTarget, e.clientX, e.clientY)}
+              className="relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-brand-700 text-white transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-40 motion-safe:enabled:active:scale-95"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="size-5" aria-hidden="true">
+                <path d="M10 3.5l6 6-1.4 1.4-3.6-3.6V16.5H9V7.3L5.4 10.9 4 9.5l6-6z" />
+              </svg>
+            </button>
+          )}
         </form>
       </div>
       <p className="mt-2 text-center text-xs text-stone-600">Answers come only from your uploaded documents.</p>

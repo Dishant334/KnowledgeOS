@@ -26,12 +26,6 @@ export function fileTypeLabel(name) {
   return LABELS[ext] ?? (ext.slice(1).toUpperCase() || 'FILE')
 }
 
-export function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 // The backend sends UTC times WITHOUT a zone ("2026-11-07T19:49:01"); a browser would read that as local time.
 export function parseServerDate(iso) {
   return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`)
