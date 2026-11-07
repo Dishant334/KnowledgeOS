@@ -1,15 +1,15 @@
 import { Outlet, useLocation } from 'react-router-dom'
-import Header from './Header'
 
-// The frame around every signed-in page: the top bar, then the page itself in <Outlet />.
+// The frame around every signed-in page (no top bar: the name and account menu live in the chat sidebar).
 // The page is keyed by its address, so every route change plays the short fade-in (.page-in in index.css).
 export default function AppShell() {
   const { pathname } = useLocation()
+  // The chat fills the whole window and scrolls inside its own columns; the other pages are a centred, scrolling column.
+  const isChat = pathname.startsWith('/chat')
 
   return (
     <div className="flex h-full flex-col">
-      <Header />
-      <main key={pathname} className="page-in mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-auto p-4">
+      <main key={pathname} className={`page-in min-h-0 w-full flex-1 ${isChat ? 'overflow-hidden' : 'mx-auto max-w-6xl overflow-auto p-4'}`}>
         <Outlet />
       </main>
     </div>
