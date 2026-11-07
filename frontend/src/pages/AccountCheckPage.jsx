@@ -32,17 +32,17 @@ export default function AccountCheckPage() {
     <div className="mx-auto max-w-xl space-y-4">
       <h1 className="text-xl font-semibold">Welcome{user?.firstName ? `, ${user.firstName}` : ''}</h1>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="text-sm font-medium text-slate-500">Backend connection</h2>
+      <section className="rounded-lg border border-stone-200 bg-white p-5">
+        <h2 className="text-sm font-medium text-stone-600">Backend connection</h2>
 
         {result.status === 'loading' && <Spinner label="Asking the backend who you are..." className="mt-3 justify-start" />}
 
         {result.status === 'ok' && (
           <div className="mt-3 space-y-1 text-sm">
             <p className="font-medium text-green-700">Connected: the backend recognises you.</p>
-            <p className="text-slate-600">Name: {result.me.name || '(not set)'}</p>
-            <p className="text-slate-600">Email: {result.me.email || '(not set)'}</p>
-            <p className="text-slate-600">Backend user id: {result.me.id}</p>
+            <p className="text-stone-600">Name: {result.me.name || '(not set)'}</p>
+            <p className="text-stone-600">Email: {result.me.email || '(not set)'}</p>
+            <p className="text-stone-600">Backend user id: {result.me.id}</p>
           </div>
         )}
 
@@ -53,7 +53,7 @@ export default function AccountCheckPage() {
         )}
       </section>
 
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-stone-600">
         Build step 1 of the frontend is in place: login, protected pages and the API client. Documents, chat and memory come in
         the next steps.
       </p>

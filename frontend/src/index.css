@@ -1,4 +1,30 @@
+/* Layer order. Clerk's own styles live in the "clerk" layer, BELOW Tailwind's utilities, so the Tailwind classes we
+   give to Clerk (src/auth/clerkAppearance.js) win. This line must come before the import. */
+@layer theme, base, clerk, components, utilities;
 @import "tailwindcss";
+
+/* ---- the KnowledgeOS palette: "Pine & amber" -------------------------------------------------------------------
+   The product's idea in colours: ink on paper, with a highlighter on the passage that was cited.
+   Every colour in the app comes from here (bg-brand-700, text-ink, bg-paper, bg-highlight ...). */
+@theme {
+  --font-display: 'Fraunces Variable', ui-serif, Georgia, 'Times New Roman', serif;
+
+  --color-paper: #f6f3ec; /* the page */
+  --color-ink: #1a2321; /* text */
+  --color-highlight: #f5b82e; /* the amber highlighter */
+
+  --color-brand-50: #f2f8f7;
+  --color-brand-100: #e0f0ed;
+  --color-brand-200: #c1e2dc;
+  --color-brand-300: #8eccc2;
+  --color-brand-400: #40bfaa;
+  --color-brand-500: #21a18c;
+  --color-brand-600: #158472;
+  --color-brand-700: #0f6b5c; /* primary buttons: white text on it is 6.4:1 */
+  --color-brand-800: #0b5a4d;
+  --color-brand-900: #0d4038;
+  --color-brand-950: #0f2b27; /* the dark panel */
+}
 
 html,
 body,
@@ -7,5 +33,159 @@ body,
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-paper text-ink antialiased;
+}
+
+/* "graph paper": the paper colour with a fine dotted grid, made of CSS only (no image) */
+.bg-graph-paper {
+  background-color: var(--color-paper);
+  background-image: radial-gradient(circle, rgb(26 35 33 / 0.16) 1px, transparent 1.3px);
+  background-size: 26px 26px;
+}
+
+/* the soft mint glow around the whole sign-in card (AuthLayout.jsx). It is a separate layer BEHIND the card, so only the
+   part outside the card's edge shows: a thin lit edge, a close glow and a wide faint one. Light on purpose. */
+.card-halo {
+  box-shadow:
+    0 0 0 1px rgb(64 191 170 / 0.4),
+    0 0 30px 4px rgb(64 191 170 / 0.34),
+    0 0 96px 12px rgb(64 191 170 / 0.2);
+}
+
+/* the wires on the dark panel (PanelWires.jsx): with no animation the pulse sits just before the start of its wire, out
+   of sight, so only the dim wire shows. The node is a quiet dot until the pulse arrives. */
+.wire-pulse {
+  stroke-dasharray: 24 176;
+  stroke-dashoffset: 24;
+}
+.wire-node {
+  opacity: 0.4;
+}
+
+/* the expanding circle of a click (src/lib/ripple.js adds it; the button needs `relative overflow-hidden`) */
+.ripple {
+  position: absolute;
+  border-radius: 9999px;
+  background: currentColor;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* ================================================================================================================
+   MOTION. Everything below is inside "no-preference": people who asked their system for less motion get the
+   finished state with no animation at all. Only `transform` and `opacity` are animated (cheap for the browser).
+   ================================================================================================================ */
+@media (prefers-reduced-motion: no-preference) {
+  /* ---- keyframes ---- */
+  @keyframes auth-up {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes auth-card-in {
+    from { opacity: 0; transform: translateY(24px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes auth-form-in {
+    from { opacity: 0; transform: translateX(var(--auth-from, 28px)); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes auth-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(3px); }
+  }
+  @keyframes auth-float {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(0, -7px, 0); }
+  }
+  @keyframes auth-drift {
+    from { transform: translate3d(0, 0, 0) rotate(var(--r, 0deg)); }
+    to { transform: translate3d(var(--dx, 12px), var(--dy, -14px), 0) rotate(calc(var(--r, 0deg) + var(--dr, 2deg))); }
+  }
+  @keyframes auth-flow {
+    to { stroke-dashoffset: -8; }
+  }
+  @keyframes auth-pulse {
+    0%, 84%, 100% { transform: scale(1); }
+    92% { transform: scale(1.14); }
+  }
+  /* a pulse of light runs along a wire: the dash slides from before the start (offset 24) to past the end (-176) */
+  @keyframes wire-run {
+    from { stroke-dashoffset: 24; }
+    to { stroke-dashoffset: -176; }
+  }
+  /* the node at the end of a wire flares when the pulse arrives (the pulse reaches the end half-way through the loop) */
+  @keyframes wire-node {
+    0%, 42%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.9); }
+    66% { opacity: 0.6; transform: scale(1.15); }
+  }
+  @keyframes ripple {
+    from { transform: scale(0); opacity: 0.35; }
+    to { transform: scale(1); opacity: 0; }
+  }
+  @keyframes page-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  /* ---- sign-in / sign-up page ---- */
+  .auth-card-in { animation: auth-card-in 650ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+  /* the form half slides in from the side the dark panel just left (--auth-from is set per page)... */
+  .auth-form-in { animation: auth-form-in 450ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+  /* ...and the pieces of Clerk's form rise one after another. These are Clerk's own class names (cl-*), which are
+     stable. They re-run on every Clerk step (email, then password, then a code) because each step is new elements. */
+  .auth-form-in .cl-header,
+  .auth-form-in .cl-formField,
+  .auth-form-in .cl-formButtonPrimary,
+  .auth-form-in .cl-dividerRow,
+  .auth-form-in .cl-socialButtonsRoot,
+  .auth-form-in .cl-footer {
+    animation: auth-up 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .auth-form-in .cl-header { animation-delay: 80ms; }
+  .auth-form-in .cl-form > :nth-child(1) .cl-formField { animation-delay: 150ms; }
+  .auth-form-in .cl-form > :nth-child(2) .cl-formField { animation-delay: 210ms; }
+  .auth-form-in .cl-form > :nth-child(3) .cl-formField { animation-delay: 270ms; }
+  .auth-form-in .cl-formButtonPrimary { animation-delay: 330ms; }
+  .auth-form-in .cl-dividerRow { animation-delay: 390ms; }
+  .auth-form-in .cl-socialButtonsRoot { animation-delay: 440ms; }
+  .auth-form-in .cl-footer { animation-delay: 490ms; }
+
+  /* the dark panel's title, text and button re-enter in sequence when the panel changes side */
+  .auth-fade > * { animation: auth-up 480ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .auth-fade > :nth-child(1) { animation-delay: 200ms; }
+  .auth-fade > :nth-child(2) { animation-delay: 280ms; }
+  .auth-fade > :nth-child(3) { animation-delay: 360ms; }
+
+  /* an error message under a field shakes once */
+  .auth-shake { animation: auth-shake 420ms ease-in-out both; }
+
+  /* ---- the artwork (AuthArtwork.jsx) ---- */
+  .auth-rise { animation: auth-up 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .art-float-1 { animation: auth-float 7s ease-in-out infinite; }
+  .art-float-2 { animation: auth-float 8.5s ease-in-out -2.5s infinite; }
+  .art-float-3 { animation: auth-float 6.5s ease-in-out -4.5s infinite; }
+  .art-flow { animation: auth-flow 1s linear infinite; } /* the dashed citation line travels from the passage to the answer */
+  .art-pulse { transform-box: fill-box; transform-origin: center; animation: auth-pulse 4.8s ease-in-out infinite; }
+
+  /* the glow slowly breathes (only its opacity changes) */
+  @keyframes halo-breathe {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+  .card-halo { animation: halo-breathe 6s ease-in-out infinite; }
+  .wire-pulse { animation: wire-run 6s linear infinite; }
+  .wire-node { transform-box: fill-box; transform-origin: center; animation: wire-node 6s ease-in-out infinite; }
+
+  /* ---- the page background (AuthBackdrop.jsx): outlined documents drifting very slowly ---- */
+  .auth-drift { animation: auth-drift 24s ease-in-out infinite alternate; }
+
+  /* ---- the whole app ---- */
+  .ripple { animation: ripple 650ms ease-out forwards; }
+  .page-in { animation: page-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 }

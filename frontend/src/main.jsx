@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+import '@fontsource-variable/fraunces' // the serif used for headings and the wordmark (font-display)
 import './index.css'
 import App from './App.jsx'
 import ClerkWithRouter from './auth/ClerkWithRouter.jsx'

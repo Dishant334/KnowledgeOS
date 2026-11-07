@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import AuthLayout from './auth/AuthLayout'
 import RequireAuth from './auth/RequireAuth'
 import SignInPage from './auth/SignInPage'
 import SignUpPage from './auth/SignUpPage'
@@ -7,12 +8,15 @@ import AccountCheckPage from './pages/AccountCheckPage'
 import ComingSoonPage from './pages/ComingSoonPage'
 import NotFoundPage from './pages/NotFoundPage'
 
-// The route table. Everything inside <RequireAuth> needs a login; everything inside <AppShell> gets the top bar.
+// The route table. Sign-in and sign-up share the AuthLayout card; everything inside <RequireAuth> needs a login;
+// everything inside <AppShell> gets the top bar.
 export default function App() {
   return (
     <Routes>
-      <Route path="/sign-in/*" element={<SignInPage />} />
-      <Route path="/sign-up/*" element={<SignUpPage />} />
+      <Route element={<AuthLayout />}>
+        <Route path="/sign-in/*" element={<SignInPage />} />
+        <Route path="/sign-up/*" element={<SignUpPage />} />
+      </Route>
 
       <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
