@@ -1,6 +1,8 @@
 import { SignUp } from '@clerk/clerk-react'
-import { authAppearance } from './clerkAppearance'
+import { useTheme } from '../theme/useTheme'
+import { authAppearanceFor } from './clerkAppearance'
 
 export default function SignUpPage() {
-  return <SignUp routing="path" path="/sign-up" signInUrl="/sign-in" appearance={authAppearance} />
+  const { theme } = useTheme()
+  return <SignUp routing="path" path="/sign-up" signInUrl="/sign-in" appearance={authAppearanceFor(theme)} />
 }

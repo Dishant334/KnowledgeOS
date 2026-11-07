@@ -21,6 +21,22 @@ export const clerkVariables = {
   fontSize: '0.9375rem',
 }
 
+// The same for dark mode (Graphite, see .dark in index.css). colorNeutral drives Clerk's own borders and shades.
+export const clerkDarkVariables = {
+  ...clerkVariables,
+  colorText: '#e5e5e5',
+  colorTextSecondary: '#a3a3a3',
+  colorBackground: '#1c1c1c',
+  colorInputBackground: '#181818',
+  colorInputText: '#e5e5e5',
+  colorNeutral: '#ffffff',
+}
+
+// The form's appearance for the current theme.
+export function authAppearanceFor(theme) {
+  return theme === 'dark' ? { ...authAppearance, variables: clerkDarkVariables } : authAppearance
+}
+
 export const authAppearance = {
   layout: {
     socialButtonsVariant: 'iconButton', // a row of small square icon buttons instead of full-width ones
@@ -41,7 +57,7 @@ export const authAppearance = {
 
     formFieldLabel: 'font-semibold text-stone-700',
     formFieldInput:
-      'h-11 rounded-xl border border-stone-200 bg-stone-50 shadow-none transition duration-200 focus:border-brand-600 focus:bg-white focus:ring-4 focus:ring-brand-100',
+      'h-11 rounded-xl border border-stone-200 bg-stone-50 shadow-none transition duration-200 focus:border-brand-600 focus:bg-surface focus:ring-4 focus:ring-brand-100',
     formFieldAction: 'font-semibold text-brand-700 hover:text-brand-800',
     formFieldInputShowPasswordButton: 'transition-colors hover:text-brand-700',
     formFieldErrorText: 'auth-shake',
@@ -49,7 +65,7 @@ export const authAppearance = {
     formButtonPrimary:
       'relative h-11 overflow-hidden rounded-xl bg-brand-700 text-sm font-semibold normal-case shadow-lg shadow-brand-900/25 transition duration-200 hover:bg-brand-800 hover:shadow-xl hover:shadow-brand-900/30 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98]',
     socialButtonsIconButton:
-      'relative h-11 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-none transition duration-200 hover:border-brand-300 hover:bg-brand-50 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-[0.98]',
+      'relative h-11 overflow-hidden rounded-xl border border-stone-200 bg-surface shadow-none transition duration-200 hover:border-brand-300 hover:bg-brand-50 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-[0.98]',
     dividerLine: 'bg-stone-200',
     dividerText: 'text-stone-500',
 

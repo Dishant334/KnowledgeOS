@@ -42,7 +42,7 @@ export default function MessageList({ messages, active, onOpen }) {
         onScroll={onScroll}
         className="h-full overflow-y-auto overflow-x-hidden [scrollbar-color:var(--color-stone-300)_transparent] [scrollbar-width:thin]"
       >
-        <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-6 [overflow-wrap:anywhere]">
+        <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-6 [overflow-wrap:anywhere] @max-[960px]:pr-20">
           {messages.map((m) => (
             <MessageBubble
               key={m.id}
@@ -59,7 +59,7 @@ export default function MessageList({ messages, active, onOpen }) {
           type="button"
           onClick={() => scrollToEnd(true)}
           aria-label="Jump to latest message"
-          className="absolute bottom-3 left-1/2 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-white text-brand-800 shadow-md ring-1 ring-stone-200 transition hover:bg-brand-50 focus-visible:outline-2 focus-visible:outline-brand-700 motion-safe:active:scale-95"
+          className="absolute bottom-3 left-1/2 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-surface text-accent-ink shadow-md ring-1 ring-stone-200 transition hover:bg-brand-50 focus-visible:outline-2 focus-visible:outline-brand-700 motion-safe:active:scale-95"
         >
           <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M10 4v12M5 11l5 5 5-5" />

@@ -14,17 +14,17 @@ const DOCS = [
 
 function DocSilhouette({ marked }) {
   return (
-    <svg viewBox="0 0 120 156" className="h-40 w-[123px]" fill="none">
-      <rect x="1" y="1" width="118" height="154" rx="10" fill="#fff" fillOpacity="0.55" stroke="#1a2321" strokeOpacity="0.14" strokeWidth="1.5" />
-      <rect x="16" y="20" width="52" height="6" rx="3" fill="#1a2321" fillOpacity="0.16" />
-      <rect x="16" y="40" width="88" height="4" rx="2" fill="#1a2321" fillOpacity="0.1" />
-      <rect x="16" y="52" width="80" height="4" rx="2" fill="#1a2321" fillOpacity="0.1" />
-      <rect x="16" y="64" width="86" height="4" rx="2" fill="#1a2321" fillOpacity="0.1" />
+    <svg viewBox="0 0 120 156" className="h-40 w-[123px] text-ink" fill="none">
+      <rect x="1" y="1" width="118" height="154" rx="10" className="fill-surface" fillOpacity="0.55" stroke="currentColor" strokeOpacity="0.14" strokeWidth="1.5" />
+      <rect x="16" y="20" width="52" height="6" rx="3" fill="currentColor" fillOpacity="0.16" />
+      <rect x="16" y="40" width="88" height="4" rx="2" fill="currentColor" fillOpacity="0.1" />
+      <rect x="16" y="52" width="80" height="4" rx="2" fill="currentColor" fillOpacity="0.1" />
+      <rect x="16" y="64" width="86" height="4" rx="2" fill="currentColor" fillOpacity="0.1" />
       {marked && <rect x="12" y="78" width="96" height="22" rx="5" fill="#f5b82e" fillOpacity="0.38" />}
-      <rect x="16" y="84" width="84" height="4" rx="2" fill="#1a2321" fillOpacity={marked ? 0.32 : 0.1} />
-      <rect x="16" y="92" width="62" height="4" rx="2" fill="#1a2321" fillOpacity={marked ? 0.32 : 0.1} />
-      <rect x="16" y="112" width="88" height="4" rx="2" fill="#1a2321" fillOpacity="0.1" />
-      <rect x="16" y="124" width="70" height="4" rx="2" fill="#1a2321" fillOpacity="0.1" />
+      <rect x="16" y="84" width="84" height="4" rx="2" fill="currentColor" fillOpacity={marked ? 0.32 : 0.1} />
+      <rect x="16" y="92" width="62" height="4" rx="2" fill="currentColor" fillOpacity={marked ? 0.32 : 0.1} />
+      <rect x="16" y="112" width="88" height="4" rx="2" fill="currentColor" fillOpacity="0.1" />
+      <rect x="16" y="124" width="70" height="4" rx="2" fill="currentColor" fillOpacity="0.1" />
     </svg>
   )
 }

@@ -2,7 +2,7 @@ import { ripple } from '../lib/ripple'
 
 const VARIANTS = {
   primary: 'bg-brand-700 text-white shadow-sm shadow-brand-900/20 hover:bg-brand-800 hover:shadow-md focus-visible:outline-brand-700',
-  secondary: 'bg-white text-stone-700 ring-1 ring-stone-300 hover:bg-stone-50 hover:ring-brand-300 focus-visible:outline-brand-700',
+  secondary: 'bg-surface text-stone-700 ring-1 ring-stone-300 hover:bg-stone-50 hover:ring-brand-300 focus-visible:outline-brand-700',
   danger: 'bg-red-700 text-white shadow-sm hover:bg-red-600 hover:shadow-md focus-visible:outline-red-700',
 }
 

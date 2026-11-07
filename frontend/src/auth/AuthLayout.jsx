@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import useParallax from '../hooks/useParallax'
 import { ripple } from '../lib/ripple'
 import AuthArtwork from './AuthArtwork'
+import ThemeLamp from '../components/ThemeLamp'
 import AuthBackdrop from './AuthBackdrop'
 import PanelWires from './PanelWires'
 
@@ -102,13 +103,14 @@ export default function AuthLayout() {
       className="bg-graph-paper relative isolate flex min-h-screen items-center justify-center overflow-hidden p-4"
     >
       <AuthBackdrop />
+      <ThemeLamp className="fixed right-6 top-0 z-30 md:right-12" />
 
       {/* the wrapper holds the card and the soft glow behind it (the card clips its contents, so the glow is a sibling) */}
       <div className="auth-card-in relative w-full max-w-[1040px]">
         <div aria-hidden="true" className="card-halo pointer-events-none absolute inset-0 rounded-3xl" />
-        <div className="relative grid w-full grid-cols-[minmax(0,1fr)] overflow-hidden rounded-3xl bg-white shadow-xl shadow-brand-950/10 ring-1 ring-brand-300/40 md:min-h-[660px] md:grid-cols-2">
+        <div className="relative grid w-full grid-cols-[minmax(0,1fr)] overflow-hidden rounded-3xl bg-surface shadow-xl shadow-brand-950/10 ring-1 ring-brand-300/40 md:min-h-[660px] md:grid-cols-2">
           {/* phone banner (hidden on desktop) */}
-          <div className="relative h-36 overflow-hidden bg-brand-950 md:hidden">
+          <div className="keep-light relative h-36 overflow-hidden bg-brand-950 md:hidden">
             <AuthArtwork slice className="absolute inset-0 h-full w-full opacity-40" />
             <div className="absolute inset-0 flex items-center gap-3 bg-brand-950/70 px-6">
               <BrandMark />
@@ -132,7 +134,7 @@ export default function AuthLayout() {
 
           {/* the sliding dark panel (desktop only) */}
           <aside
-            className={`absolute inset-y-0 left-0 z-10 hidden w-1/2 flex-col justify-between bg-brand-950 p-10 text-white transition-transform duration-[650ms] ease-[cubic-bezier(0.65,0,0.35,1)] will-change-transform motion-reduce:transition-none md:flex ${signingUp ? 'translate-x-0' : 'translate-x-full'}`}
+            className={`keep-light absolute inset-y-0 left-0 z-10 hidden w-1/2 flex-col justify-between bg-brand-950 p-10 text-white transition-transform duration-[650ms] ease-[cubic-bezier(0.65,0,0.35,1)] will-change-transform motion-reduce:transition-none md:flex ${signingUp ? 'translate-x-0' : 'translate-x-full'}`}
           >
             <PanelWires />
 

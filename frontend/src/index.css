@@ -3,6 +3,9 @@
 @layer theme, base, clerk, components, utilities;
 @import "tailwindcss";
 
+/* `dark:` utilities apply inside the .dark wrapper (ThemeProvider), not by the system setting */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ---- the KnowledgeOS palette: "Pine & amber" -------------------------------------------------------------------
    The product's idea in colours: ink on paper, with a highlighter on the passage that was cited.
    Every colour in the app comes from here (bg-brand-700, text-ink, bg-paper, bg-highlight ...). */
@@ -12,6 +15,8 @@
   --color-paper: #f6f3ec; /* the page */
   --color-ink: #1a2321; /* text */
   --color-highlight: #f5b82e; /* the amber highlighter */
+  --color-surface: #ffffff; /* cards, the question box, panels (white in light mode) */
+  --color-accent-ink: #0b5a4d; /* green text: names, active items, chip numbers */
 
   --color-brand-50: #f2f8f7;
   --color-brand-100: #e0f0ed;
@@ -59,7 +64,7 @@ body {
   --near: 0;
   translate: var(--tx) var(--ty);
   scale: calc(1 + var(--near) * 0.12);
-  opacity: calc(0.11 + var(--near) * 0.2);
+  opacity: calc(0.2 + var(--near) * 0.3);
 }
 .letter-fill,
 .letter-fill-accent {
@@ -68,8 +73,11 @@ body {
   color: transparent;
   padding: 0 0.02em; /* keeps the gradient from clipping the edges of slanted letters */
 }
-.letter-fill { background-image: linear-gradient(165deg, var(--color-brand-500), var(--color-brand-900)); }
-.letter-fill-accent { background-image: linear-gradient(165deg, var(--color-highlight), #b9770b); }
+.letter-fill { background-image: linear-gradient(165deg, var(--color-brand-400), var(--color-brand-700)); }
+.letter-fill-accent { background-image: linear-gradient(165deg, #ffd36b, #d99a16); }
+/* the glow: a soft coloured light around each letter (drop-shadow follows the letter's shape, even with a gradient fill) */
+.letter-fill { filter: drop-shadow(0 0 10px rgb(64 191 170 / 0.55)) drop-shadow(0 0 28px rgb(64 191 170 / 0.3)); }
+.letter-fill-accent { filter: drop-shadow(0 0 10px rgb(245 184 46 / 0.6)) drop-shadow(0 0 28px rgb(245 184 46 / 0.3)); }
 
 /* the question box's glow (Composer.jsx): while the box has focus, a 2 px border of mint/amber light (a conic gradient
    behind the white box, peeking out around it) and a soft halo. The angle is a registered property so it can animate. */
@@ -118,6 +126,48 @@ body {
 .composer-glow:hover:not(:focus-within)::after {
   opacity: 0.8;
 }
+
+/* DARK MODE ("Graphite"): the signed-in app's wrapper gets .dark (ThemeProvider). The shared tokens are redefined, so
+   every bg-paper / text-ink / stone-* / bg-surface class follows without per-component dark: variants. The stone scale is
+   flipped (50 = darkest surface, 900 = lightest text). Brand 700 (buttons with white text) is unchanged. */
+.dark {
+  color-scheme: dark;
+  --color-paper: #121212;
+  --color-ink: #e5e5e5;
+  --color-surface: #1c1c1c;
+  --color-accent-ink: #7fd8c8;
+  --color-stone-50: #181818;
+  --color-stone-100: #222222;
+  --color-stone-200: #2c2c2c;
+  --color-stone-300: #3a3a3a;
+  --color-stone-400: #555555;
+  --color-stone-500: #8a8a8a;
+  --color-stone-600: #a3a3a3;
+  --color-stone-700: #c2c2c2;
+  --color-stone-800: #dadada;
+  --color-stone-900: #ececec;
+  --color-brand-50: #14211e;
+  --color-brand-100: #183630;
+  --color-brand-200: #1f4740;
+}
+/* parts that are ALWAYS dark (the sign-in page's pine panel) keep the light tints for their text and buttons */
+.dark .keep-light {
+  --color-paper: #f6f3ec;
+  --color-brand-50: #f2f8f7;
+  --color-brand-100: #e0f0ed;
+  --color-brand-200: #c1e2dc;
+}
+/* the sign-in page's dotted graph paper: light dots on charcoal */
+.dark .bg-graph-paper { background-image: radial-gradient(circle, rgb(255 255 255 / 0.08) 1px, transparent 1.3px); }
+/* the background letters: lighter fill so they still show on charcoal */
+.dark .letter-fill {
+  background-image: linear-gradient(165deg, #b5f0e5, #40bfaa);
+  filter: drop-shadow(0 0 10px rgb(64 191 170 / 0.4)) drop-shadow(0 0 30px rgb(64 191 170 / 0.2));
+}
+.dark .letter-fill-accent {
+  filter: drop-shadow(0 0 10px rgb(245 184 46 / 0.4)) drop-shadow(0 0 30px rgb(245 184 46 / 0.2));
+}
+.dark .letter-push { opacity: calc(0.3 + var(--near) * 0.35); }
 
 /* the wires on the dark panel (PanelWires.jsx): with no animation the pulse sits just before the start of its wire, out
    of sight, so only the dim wire shows. The node is a quiet dot until the pulse arrives. */
@@ -277,5 +327,21 @@ body {
   }
   .composer-glow:focus-within::before { animation: composer-spin 4s linear infinite; }
   .composer-glow:focus-within::after { animation: composer-bloom 700ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  /* the theme lamp (ThemeLamp.jsx): the cord stretches when pulled and the lamp swings from the ceiling */
+  @keyframes lamp-pull {
+    0% { transform: translateY(0); }
+    30% { transform: translateY(9px); }
+    60% { transform: translateY(-2px); }
+    100% { transform: translateY(0); }
+  }
+  @keyframes lamp-swing {
+    0% { transform: rotate(0); }
+    20% { transform: rotate(7deg); }
+    45% { transform: rotate(-5deg); }
+    70% { transform: rotate(2.5deg); }
+    100% { transform: rotate(0); }
+  }
+  .lamp-pull { animation: lamp-pull 550ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .lamp-swing { transform-origin: 50% 0; animation: lamp-swing 1100ms ease-out; }
   .page-in { animation: page-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 }

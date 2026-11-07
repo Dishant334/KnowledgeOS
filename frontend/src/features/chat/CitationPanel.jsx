@@ -12,7 +12,7 @@ export default function CitationPanel({ citation, others, onClose, onSwitch }) {
   return (
     <aside
       aria-label={`Source ${citation.n}`}
-      className="source-panel fixed inset-x-0 bottom-0 z-30 flex h-[65%] flex-col rounded-t-2xl bg-white shadow-2xl ring-1 ring-stone-200 md:static md:z-auto md:h-auto md:w-[360px] md:shrink-0 md:rounded-none md:shadow-none md:ring-0 md:border-l md:border-stone-200"
+      className="source-panel fixed inset-x-0 bottom-0 z-30 flex h-[65%] flex-col rounded-t-2xl bg-surface shadow-2xl ring-1 ring-stone-200 md:static md:z-auto md:h-auto md:w-[360px] md:shrink-0 md:rounded-none md:shadow-none md:ring-0 md:border-l md:border-stone-200"
     >
       <div className="flex items-start justify-between gap-3 border-b border-stone-200 p-4">
         <div className="min-w-0">
@@ -49,7 +49,7 @@ export default function CitationPanel({ citation, others, onClose, onSwitch }) {
               key={c.n}
               type="button"
               onClick={() => onSwitch(c.n)}
-              className="rounded-md bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-800 transition hover:bg-brand-200 focus-visible:outline-2 focus-visible:outline-brand-700"
+              className="rounded-md bg-brand-100 px-2 py-0.5 text-xs font-semibold text-accent-ink transition hover:bg-brand-200 focus-visible:outline-2 focus-visible:outline-brand-700"
             >
               {c.n}
             </button>

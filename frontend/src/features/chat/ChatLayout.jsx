@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import ThemeLamp from '../../components/ThemeLamp'
+import DocumentsPanel from '../documents/DocumentsPanel'
+import { useUploads } from '../documents/useUploads'
 import ChatBackground from './ChatBackground'
 import Composer from './Composer'
 import CitationPanel from './CitationPanel'
@@ -8,26 +11,26 @@ import MessageList from './MessageList'
 import { SAMPLE_MESSAGES } from './sampleData'
 
 // The chat screen: conversations (left), the chat (middle), and a source panel (right) that exists only while a
-// citation is open. UI ONLY for now: everything shown is sample data from sampleData.js.
+// citation is open. Documents are real (upload from the question box, the Documents panel); the chat itself is still
+// sample data from sampleData.js until it is connected.
 // "/chat" shows the empty new-chat state; "/chat/:id" shows the sample conversation.
 export default function ChatLayout({ empty }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [active, setActive] = useState(null) // { messageId, n } of the open source
   const [draft, setDraft] = useState('')
+  const [docsOpen, setDocsOpen] = useState(false)
+  const uploads = useUploads() // owned here so uploads survive the box moving from the middle to the bottom
 
-  // The chat's messages live in state. A new chat starts empty; asking adds the question (and, until the backend is
-  // connected, a stand-in answer). While there are no messages the box sits mid-screen; the first question pushes it down.
+  // The chat's messages live in state. A new chat starts empty; asking adds the question (answers come once the
+  // backend is connected). While there are no messages the heading and box sit mid-screen; the first question clears the
+  // heading away and the box moves to the bottom.
   const [messages, setMessages] = useState(empty ? [] : SAMPLE_MESSAGES)
   const message = active && messages.find((m) => m.id === active.messageId)
   const citation = message?.citations?.find((c) => c.n === active.n)
 
   const ask = (text) => {
     const id = Date.now()
-    setMessages((all) => [
-      ...all,
-      { id, role: 'user', content: text },
-      { id: id + 1, role: 'assistant', content: 'Answers will appear here once the chat is connected to your documents.', citations: [] },
-    ])
+    setMessages((all) => [...all, { id, role: 'user', content: text }])
     setDraft('')
   }
 
@@ -35,11 +38,22 @@ export default function ChatLayout({ empty }) {
 
   return (
     <div className="relative flex h-full min-h-0">
-      <ConversationSidebar open={drawerOpen} onClose={() => setDrawerOpen(false)} activeId={null} onSelect={() => setDrawerOpen(false)} />
+      <ConversationSidebar
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        activeId={null}
+        onSelect={() => setDrawerOpen(false)}
+        onOpenDocuments={() => {
+          setDrawerOpen(false)
+          setDocsOpen(true)
+        }}
+      />
 
-      <section className="relative isolate flex min-w-0 flex-1 flex-col">
+      {/* @container: children can react to the chat area's own width (the lamp needs room when it is narrow) */}
+      <section className="@container relative isolate flex min-w-0 flex-1 flex-col">
         <ChatBackground />
-        <div className="flex items-center gap-2 border-b border-stone-200 px-3 py-2 md:hidden">
+        <ThemeLamp className="absolute right-6 top-0 z-20 md:right-10" />
+        <div className="flex items-center gap-2 border-b border-stone-200 py-2 pl-3 pr-20 md:hidden">
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
@@ -54,11 +68,11 @@ export default function ChatLayout({ empty }) {
         </div>
 
         {messages.length === 0 ? (
-          <EmptyChat composer={<Composer value={draft} onChange={setDraft} onSubmit={ask} />} />
+          <EmptyChat composer={<Composer value={draft} onChange={setDraft} onSubmit={ask} uploads={uploads} />} />
         ) : (
           <>
             <MessageList messages={messages} active={active} onOpen={open} />
-            <Composer value={draft} onChange={setDraft} onSubmit={ask} />
+            <Composer value={draft} onChange={setDraft} onSubmit={ask} uploads={uploads} />
           </>
         )}
       </section>
@@ -72,6 +86,7 @@ export default function ChatLayout({ empty }) {
           onSwitch={(n) => setActive({ messageId: active.messageId, n })}
         />
       )}
+      {docsOpen && <DocumentsPanel onClose={() => setDocsOpen(false)} onUpload={uploads.addFiles} uploadsVersion={uploads.version} />}
     </div>
   )
 }

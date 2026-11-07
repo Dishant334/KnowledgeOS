@@ -16,7 +16,7 @@ export default function MessageBubble({ message, activeN, onOpen }) {
   const citations = message.citations ?? []
   return (
     <div>
-      <p className="mb-1 font-display text-sm font-semibold text-brand-800">KnowledgeOS</p>
+      <p className="mb-1 font-display text-sm font-semibold text-accent-ink">KnowledgeOS</p>
       <AnswerText text={message.content} citations={citations} activeN={activeN} onOpen={(n) => onOpen(message, n)} />
       {citations.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-2">
@@ -25,9 +25,9 @@ export default function MessageBubble({ message, activeN, onOpen }) {
               <button
                 type="button"
                 onClick={() => onOpen(message, c.n)}
-                className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-white px-2.5 py-1 text-xs text-stone-700 ring-1 ring-stone-200 transition hover:ring-brand-400 focus-visible:outline-2 focus-visible:outline-brand-700"
+                className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-surface px-2.5 py-1 text-xs text-stone-700 ring-1 ring-stone-200 transition hover:ring-brand-400 focus-visible:outline-2 focus-visible:outline-brand-700"
               >
-                <span className="rounded bg-brand-100 px-1 font-semibold text-brand-800">{c.n}</span>
+                <span className="rounded bg-brand-100 px-1 font-semibold text-accent-ink">{c.n}</span>
                 <span className="truncate">{c.filename}</span>
                 {c.page && <span className="text-stone-600">p.{c.page}</span>}
               </button>

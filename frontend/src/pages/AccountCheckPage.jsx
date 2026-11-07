@@ -32,7 +32,7 @@ export default function AccountCheckPage() {
     <div className="mx-auto max-w-xl space-y-4">
       <h1 className="text-xl font-semibold">Welcome{user?.firstName ? `, ${user.firstName}` : ''}</h1>
 
-      <section className="rounded-lg border border-stone-200 bg-white p-5">
+      <section className="rounded-lg border border-stone-200 bg-surface p-5">
         <h2 className="text-sm font-medium text-stone-600">Backend connection</h2>
 
         {result.status === 'loading' && <Spinner label="Asking the backend who you are..." className="mt-3 justify-start" />}
