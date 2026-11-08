@@ -116,9 +116,23 @@ export default function ChatLayout() {
     }
   }, [routeId, showExisting])
 
+  // A question asked while a document of this chat is still uploading or being processed would be answered without
+  // it (a refusal). Instead it waits, and is sent by itself as soon as every file is ready (or failed); the notice
+  // above the box offers "Ask now" and "Cancel".
+  const [waiting, setWaiting] = useState(null) // the question text, or null
+  const processingNames = uploads.items
+    .filter((i) => i.status === 'uploading' || i.status === 'pending' || i.status === 'processing')
+    .map((i) => i.name)
+  const stillProcessing = processingNames.length > 0
+
   // Ask a question: the question appears at once, then the answer streams in under it.
-  const ask = async (text, { retryOf } = {}) => {
+  const ask = async (text, { retryOf, force } = {}) => {
     if (streaming.current) return
+    if (!force && !retryOf && stillProcessing) {
+      setWaiting(text)
+      setDraft('')
+      return
+    }
     const answerId = `a-${Date.now()}`
     if (retryOf) {
       patchMessage(retryOf, { status: 'streaming', content: '', error: null, citations: [], id: answerId })
@@ -172,6 +186,39 @@ export default function ChatLayout() {
 
   const stop = () => streaming.current?.abort()
 
+  // the documents finished: send the waiting question
+  useEffect(() => {
+    if (waiting === null || stillProcessing || busy) return
+    let alive = true
+    // started from a microtask, not synchronously inside the effect (it updates state)
+    Promise.resolve().then(() => {
+      if (!alive) return
+      setWaiting(null)
+      ask(waiting, { force: true })
+    })
+    return () => {
+      alive = false
+    }
+    // `ask` is recreated every render; this only needs to react to the documents finishing
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting, stillProcessing, busy])
+
+  const waitingNotice = waiting !== null && (
+    <WaitingNotice
+      question={waiting}
+      names={processingNames}
+      onAskNow={() => {
+        const text = waiting
+        setWaiting(null)
+        ask(text, { force: true })
+      }}
+      onCancel={() => {
+        setDraft(waiting)
+        setWaiting(null)
+      }}
+    />
+  )
+
   // New chat: a clean screen (no messages, no file chips, empty box). The previous chat is discarded if it was
   // never used (its own files go with it); otherwise it stays in the list with its documents.
   const newChat = () => {
@@ -181,6 +228,7 @@ export default function ChatLayout() {
     hasMessages.current = false
     setMessages([])
     setLoadState(null)
+    setWaiting(null)
     setDraft('')
     setActive(null)
     uploads.reset()
@@ -227,11 +275,11 @@ export default function ChatLayout() {
             <ErrorBanner message={loadState.error} action={<Button variant="secondary" onClick={newChat}>New chat</Button>} />
           </div>
         ) : messages.length === 0 ? (
-          <EmptyChat composer={<Composer value={draft} onChange={setDraft} onSubmit={ask} uploads={uploads} busy={busy} onStop={stop} />} />
+          <EmptyChat composer={<Composer value={draft} onChange={setDraft} onSubmit={ask} uploads={uploads} busy={busy} onStop={stop} notice={waitingNotice} />} />
         ) : (
           <>
             <MessageList messages={messages} active={active} onOpen={open} onRetry={(m) => ask(m.question, { retryOf: m.id })} />
-            <Composer value={draft} onChange={setDraft} onSubmit={ask} uploads={uploads} busy={busy} onStop={stop} />
+            <Composer value={draft} onChange={setDraft} onSubmit={ask} uploads={uploads} busy={busy} onStop={stop} notice={waitingNotice} />
           </>
         )}
       </section>
@@ -245,6 +293,31 @@ export default function ChatLayout() {
           onSwitch={(n) => setActive({ messageId: active.messageId, n })}
         />
       )}
+    </div>
+  )
+}
+
+// "Your question will be asked as soon as <file> is ready": shown above the question box while a question waits.
+function WaitingNotice({ question, names, onAskNow, onCancel }) {
+  const files = names.length === 1 ? `"${names[0]}" is` : `${names.length} documents are`
+  return (
+    <div role="status" className="page-in mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-highlight/15 px-3 py-2 text-left text-sm text-ink ring-1 ring-highlight/40">
+      <svg className="size-4 shrink-0 animate-spin text-amber-700 dark:text-amber-300" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+      </svg>
+      <p className="min-w-0 flex-1">
+        {files} still being processed. Your question <span className="font-medium">&ldquo;{question.length > 60 ? `${question.slice(0, 60)}...` : question}&rdquo;</span> will
+        be asked as soon as {names.length === 1 ? 'it is' : 'they are'} ready.
+      </p>
+      <span className="flex shrink-0 gap-2">
+        <button type="button" onClick={onAskNow} className="rounded-md px-2 py-0.5 text-xs font-semibold text-accent-ink ring-1 ring-brand-300 transition hover:bg-brand-50 focus-visible:outline-2 focus-visible:outline-brand-700">
+          Ask now
+        </button>
+        <button type="button" onClick={onCancel} className="rounded-md px-2 py-0.5 text-xs font-semibold text-stone-700 ring-1 ring-stone-300 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-brand-700">
+          Cancel
+        </button>
+      </span>
     </div>
   )
 }

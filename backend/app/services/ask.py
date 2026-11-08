@@ -13,6 +13,7 @@ from app.generation.orchestrator import (
     RECENT_KEEP_TOKENS,
     count_tokens,
     generate_answer,
+    is_refusal,
     stream_answer,
     trim_history,
 )
@@ -22,7 +23,7 @@ from app.memory.store import list_memories
 from app.schemas.ask import AskRequest, AskResponse, Citation
 from app.services.conversations import conversation_document_ids
 from app.services.retrieve import run_retrieval
-from app.services.small_talk import reply_without_documents
+from app.services.small_talk import GREETING_REPLY, NEED_DOCUMENT_REPLY, reply_without_documents
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,23 @@ def _load_unsummarized(db: Session, conversation: Conversation) -> list[tuple[in
         query = query.filter(Message.id > conversation.summarized_until_message_id)
 
     return [(m.id, m.role, m.content) for m in query.order_by(Message.id).all()]
+
+
+def _without_refused_turns(messages: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """
+    The history for the model, minus every question that got no real answer (a refusal, or one of the fixed replies
+    for a chat without documents) together with that answer. Qwen copies a refusal it sees in the history: a chat
+    whose first question came before its PDF was processed kept refusing afterwards (3 of 3 runs, 0 of 2 without the
+    history). Nothing is deleted: the chat still shows these turns; they only stay out of the prompt and the rewriter.
+    """
+    kept: list[tuple[str, str]] = []
+    for role, content in messages:
+        if role == "assistant" and (content in (GREETING_REPLY, NEED_DOCUMENT_REPLY) or is_refusal(content)):
+            if kept and kept[-1][0] == "user":
+                kept.pop()           # its question goes too
+            continue
+        kept.append((role, content))
+    return kept
 
 
 def _load_memories(user_id: int) -> list[str]:
@@ -192,7 +210,7 @@ def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[
         conversation = _get_conversation(db, user_id, request.conversation_id)
         summary = conversation.summary or ""
         unsummarized = [(role, content) for _, role, content in _load_unsummarized(db, conversation)]
-        history = trim_history(unsummarized)  # safety net only: normally already small thanks to the summary
+        history = trim_history(_without_refused_turns(unsummarized))  # safety net only: normally already small thanks to the summary
 
     document_ids = conversation_document_ids(db, conversation.id) if conversation is not None else []
     if not document_ids:

@@ -7,12 +7,14 @@ import UploadChip from '../documents/UploadChip'
 // The paperclip uploads documents (see features/documents/useUploads.js, owned by ChatLayout so uploads keep going when
 // the box moves from the middle to the bottom); each file shows as a chip above the box with its live status.
 // While an answer is being written (`busy`) the send button becomes a Stop button and Enter does not send.
-export default function Composer({ value, onChange, onSubmit, uploads, busy = false, onStop }) {
+// `notice` is an optional element shown above everything (for example "your question is waiting for a document").
+export default function Composer({ value, onChange, onSubmit, uploads, busy = false, onStop, notice = null }) {
   const input = useRef(null)
   const field = useRef(null)
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pb-4">
+      {notice}
       {uploads?.items.length > 0 && (
         <ul className="mb-2 flex flex-wrap gap-2 text-left" aria-label="Files being added">
           {uploads.items.map((item) => (

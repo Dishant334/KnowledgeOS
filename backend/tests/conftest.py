@@ -194,9 +194,7 @@ def db():
         session.close()
 
 
-@pytest.fixture(autouse=True)
-def clean_tables():
-    yield
+def _truncate_tables():
     from sqlalchemy import text
 
     from app.db.database import engine
@@ -205,6 +203,15 @@ def clean_tables():
         conn.execute(text("TRUNCATE users RESTART IDENTITY CASCADE"))
         # long-term memory lives in its own tables (created on first use)
         conn.execute(text("DO $$ BEGIN IF to_regclass('public.store') IS NOT NULL THEN DELETE FROM store; END IF; END $$"))
+
+
+@pytest.fixture(autouse=True)
+def clean_tables():
+    """Empty tables (ids restart at 1) before AND after every test: rows left by a crashed run or a manual check
+    in the test database would otherwise break the first test of the next run."""
+    _truncate_tables()
+    yield
+    _truncate_tables()
 
 
 def unique_clerk_id() -> str:

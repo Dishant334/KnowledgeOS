@@ -410,3 +410,39 @@ def test_small_talk_detection():
     for text in ["hi, how many vacation days do I get?", "what is the leave policy", "hello world program in python",
                  "summarise the report", "", "thanks for the budget numbers, what about Q3?"]:
         assert not is_small_talk(text), text
+
+
+def test_an_earlier_refusal_in_the_chat_is_left_out_of_the_prompt(client, users, use_llm, db):
+    """A question asked before the document was ready got a refusal; the next question must not see it."""
+    from app.services.small_talk import GREETING_REPLY
+
+    calls = []
+    use_llm(make_fake_llm(answer="Twenty days [1].", calls=calls))
+    conversation_id = chat(users[0])
+    for role, content in [("user", "hi"), ("assistant", GREETING_REPLY),
+                          ("user", "what is this about"), ("assistant", "I don't have enough information to answer that."),
+                          ("user", "Who wrote the handbook?"), ("assistant", "The handbook was written by HR [1].")]:
+        db.add(Message(conversation_id=conversation_id, role=role, content=content))
+    db.commit()
+
+    resp = client.post("/ask", headers=headers_for(users[0]),
+                       json={"query": "How many vacation days do employees get?", "conversation_id": conversation_id})
+
+    assert resp.status_code == 200, resp.text
+    prompt = next(c for c in calls if "Context:" in c)
+    # (the system instructions themselves mention "I don't have enough information": check the history turns)
+    assert "AI: I don't have enough information" not in prompt and "what is this about" not in prompt
+    assert GREETING_REPLY not in prompt and "Human: hi\n" not in prompt
+    assert "AI: The handbook was written by HR [1]." in prompt           # real answers still reach the prompt
+    assert "Human: Who wrote the handbook?" in prompt
+
+
+def test_without_refused_turns_unit():
+    from app.services.ask import _without_refused_turns
+    from app.services.small_talk import NEED_DOCUMENT_REPLY
+
+    history = [("user", "q1"), ("assistant", "I don't have enough information to answer that."),
+               ("user", "q2"), ("assistant", "Real answer [1]."),
+               ("user", "q3"), ("assistant", NEED_DOCUMENT_REPLY),
+               ("user", "q4"), ("assistant", "The context does not provide information about that.")]
+    assert _without_refused_turns(history) == [("user", "q2"), ("assistant", "Real answer [1].")]
