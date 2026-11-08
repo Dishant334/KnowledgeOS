@@ -17,9 +17,11 @@ import ChatBackground from './ChatBackground'
 import Composer from './Composer'
 import CitationPanel from './CitationPanel'
 import ConversationSidebar from './ConversationSidebar'
+import RenameDialog from './RenameDialog'
 import EmptyChat from './EmptyChat'
 import MessageList from './MessageList'
 import { toCitation } from './citations'
+import { useConversations } from './useConversations'
 
 // The chat screen: conversations (left), the chat (middle), and a source panel (right) that exists only while a
 // citation is open. Documents are uploaded with the paperclip (chips above the question box) and belong to this chat;
@@ -53,6 +55,8 @@ export default function ChatLayout() {
   }, [])
 
   const uploads = useUploads(getConversationId) // owned here so uploads survive the box moving to the bottom
+  const list = useConversations() // the sidebar
+  const [renaming, setRenaming] = useState(null) // the conversation whose name is being edited
 
   // A chat you leave without asking anything is removed with the files uploaded only into it (the backend refuses
   // once it has a message, and sweeps up any it missed after 2 hours). `hasMessages` turns true once the backend has
@@ -164,6 +168,7 @@ export default function ChatLayout() {
         abstained: done.abstained,
       })
       hasMessages.current = true
+      list.refresh() // a new chat appears in the sidebar; an older one moves to the top
       if (Number(routeId) !== done.conversation_id) navigate(`/chat/${done.conversation_id}`, { replace: !routeId })
     } catch (error) {
       if (error.name === 'AbortError') {
@@ -185,6 +190,21 @@ export default function ChatLayout() {
   }
 
   const stop = () => streaming.current?.abort()
+
+  // the sidebar: open another chat (an unused current chat is discarded first), or delete one
+  const openConversation = (id) => {
+    setDrawerOpen(false)
+    if (id === conversation.current.id) return
+    discardIfEmpty()
+    navigate(`/chat/${id}`)
+  }
+  const deleteChat = async (id) => {
+    await list.remove(id)
+    if (id === conversation.current.id) {
+      hasMessages.current = true // already deleted: nothing to discard
+      newChat()
+    }
+  }
 
   // the documents finished: send the waiting question
   useEffect(() => {
@@ -243,9 +263,17 @@ export default function ChatLayout() {
       <ConversationSidebar
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        activeId={null}
-        onSelect={() => setDrawerOpen(false)}
+        activeId={routeId ? Number(routeId) : null}
+        onSelect={openConversation}
         onNewChat={newChat}
+        conversations={list.conversations}
+        error={list.error}
+        onRetry={list.refresh}
+        onRename={(c) => {
+          setDrawerOpen(false)
+          setRenaming(c)
+        }}
+        onDelete={deleteChat}
       />
 
       {/* @container: children can react to the chat area's own width (the lamp needs room when it is narrow) */}
@@ -264,7 +292,7 @@ export default function ChatLayout() {
             </svg>
           </button>
           <span className="truncate text-sm font-medium text-stone-700">
-            {messages.find((m) => m.role === 'user')?.content ?? 'New chat'}
+            {list.conversations?.find((c) => c.id === Number(routeId))?.title ?? messages.find((m) => m.role === 'user')?.content ?? 'New chat'}
           </span>
         </div>
 
@@ -291,6 +319,13 @@ export default function ChatLayout() {
           others={message.citations.filter((c) => c.n !== citation.n)}
           onClose={() => setActive(null)}
           onSwitch={(n) => setActive({ messageId: active.messageId, n })}
+        />
+      )}
+      {renaming && (
+        <RenameDialog
+          currentTitle={renaming.title}
+          onSave={(title) => list.rename(renaming.id, title)}
+          onClose={() => setRenaming(null)}
         />
       )}
     </div>

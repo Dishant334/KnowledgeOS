@@ -1,5 +1,23 @@
 import { api, peekAuthToken } from './client'
 
+// The sidebar list: your conversations that have at least one message, most recently active first.
+// Each row: { id, title, created_at, last_message_at, message_count }.
+export async function listConversations() {
+  const { data } = await api.get('/conversations', { params: { limit: 100 } })
+  return data
+}
+
+// New title (trimmed by the backend, 1-255 characters). Returns the updated row.
+export async function renameConversation(conversationId, title) {
+  const { data } = await api.patch(`/conversations/${conversationId}`, { title })
+  return data
+}
+
+// Deletes the conversation and its messages. Its documents stay in your library.
+export async function deleteConversation(conversationId) {
+  await api.delete(`/conversations/${conversationId}`)
+}
+
 // A new, empty conversation: { id, title: null, created_at, last_message_at, message_count: 0 }.
 // It is not listed until it has a message.
 export async function createConversation() {
