@@ -1,4 +1,7 @@
 from fastapi import APIRouter, Depends, Response, status
+from sqlalchemy.orm import Session
+
+from app.db.database import get_db
 
 from app.db.models.user import User
 from app.dependencies.auth import get_current_user
@@ -14,9 +17,9 @@ router = APIRouter(prefix="/memory", tags=["Memory"])
 
 
 @router.get("", response_model=list[MemoryOut])
-def list_memories(current_user: User = Depends(get_current_user)):
+def list_memories(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """What the assistant remembers about you across all conversations."""
-    return list_user_memories(current_user.id)
+    return list_user_memories(current_user.id, db)
 
 
 @router.post("", response_model=MemoryOut, status_code=status.HTTP_201_CREATED)

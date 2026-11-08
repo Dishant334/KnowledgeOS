@@ -1,3 +1,4 @@
+from uuid import UUID
 from datetime import datetime
 from typing import Optional
 
@@ -6,7 +7,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class AskRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=4000)
-    conversation_id: Optional[int] = Field(
+    conversation_id: Optional[UUID] = Field(
         default=None,
         description="Omit to start a new conversation; pass an existing id to continue one.",
     )
@@ -26,7 +27,7 @@ class Citation(BaseModel):
 
 
 class AskResponse(BaseModel):
-    conversation_id: int
+    conversation_id: UUID                 # the conversation's public id (also in the URL /chat/<id>)
     message_id: int
     answer: str
     citations: list[Citation]

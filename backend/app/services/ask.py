@@ -19,9 +19,12 @@ from app.generation.orchestrator import (
 )
 from app.generation.summary import format_messages, split_for_summary, summarize
 from app.memory.consolidate import update_long_term_memory
+from app.memory import store as memory_store
 from app.memory.store import list_memories
 from app.schemas.ask import AskRequest, AskResponse, Citation
+from app.services.conversation_memory import remember_if_due
 from app.services.conversations import conversation_document_ids
+from app.services.introductions import NAME_PREFIX, SelfFact, analyze_message, social_reply
 from app.services.retrieve import run_retrieval
 from app.services.small_talk import GREETING_REPLY, NEED_DOCUMENT_REPLY, reply_without_documents
 
@@ -38,10 +41,10 @@ def looks_like_quota_error(error: Exception) -> bool:
     return any(word in text for word in words)
 
 
-def _get_conversation(db: Session, user_id: int, conversation_id: int) -> Conversation:
+def _get_conversation(db: Session, user_id: int, conversation_id) -> Conversation:
     conversation = (
         db.query(Conversation)
-        .filter_by(id=conversation_id, user_id=user_id)
+        .filter_by(public_id=conversation_id, user_id=user_id)   # the public UUID from the request
         .first()
     )
     if conversation is None:
@@ -69,13 +72,52 @@ def _without_refused_turns(messages: list[tuple[str, str]]) -> list[tuple[str, s
     history). Nothing is deleted: the chat still shows these turns; they only stay out of the prompt and the rewriter.
     """
     kept: list[tuple[str, str]] = []
+    skip_answer = False
     for role, content in messages:
+        if role == "user" and analyze_message(content).only_social:
+            skip_answer = True                       # a greeting or small talk: neither it nor its reply is useful
+            continue
+        if role == "assistant" and skip_answer:
+            skip_answer = False
+            continue
         if role == "assistant" and (content in (GREETING_REPLY, NEED_DOCUMENT_REPLY) or is_refusal(content)):
             if kept and kept[-1][0] == "user":
                 kept.pop()           # its question goes too
             continue
         kept.append((role, content))
     return kept
+
+
+def _remember_self_facts(user_id: int, facts: list[SelfFact], conversation_id: int | None) -> tuple[list[SelfFact], bool]:
+    """
+    Stores facts the user stated about themselves (see services/introductions.py). A new name replaces the old
+    one; a fact already known counts as remembered; text the memory guard refuses is skipped.
+    Returns (remembered, memory_full). Never raises: memory problems must not fail /ask.
+    """
+    remembered: list[SelfFact] = []
+    full = False
+    try:
+        existing = memory_store.list_memories(user_id)
+        for fact in facts:
+            if memory_store.clean_memory_text(fact.text) is None:
+                continue
+            if any(m.text.lower() == fact.text.lower() for m in existing):
+                remembered.append(fact)                      # already known
+                continue
+            if fact.kind == "name":
+                for old in [m for m in existing if m.text.lower().startswith(NAME_PREFIX.lower())]:
+                    memory_store.delete_memory(user_id, old.key)
+                    existing.remove(old)
+            try:
+                existing.append(memory_store.add_memory(user_id, fact.text, conversation_id=conversation_id))
+                remembered.append(fact)
+            except memory_store.MemoryLimitError:
+                full = True
+            except ValueError:
+                pass                                         # refused by the guard
+    except Exception:
+        logger.warning("Could not remember what the user said about themselves", exc_info=True)
+    return remembered, full
 
 
 def _load_memories(user_id: int) -> list[str]:
@@ -152,8 +194,8 @@ def _save_turn(
     answer: str,
     citations: list[Citation],
     abstained: bool,
-) -> AskResponse:
-    """Saves the question and the answer (creating the conversation if needed) and returns the response."""
+) -> tuple[AskResponse, Conversation]:
+    """Saves the question and the answer (creating the conversation if needed): (response, conversation)."""
     if conversation is None:
         conversation = Conversation(user_id=user_id, title=question[:80])
         db.add(conversation)
@@ -178,13 +220,13 @@ def _save_turn(
     db.refresh(assistant_message)
 
     return AskResponse(
-        conversation_id=conversation.id,
+        conversation_id=conversation.public_id,
         message_id=assistant_message.id,
         answer=answer,
         citations=citations,
         abstained=abstained,
         created_at=assistant_message.created_at,
-    )
+    ), conversation
 
 
 def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[tuple[str, object]]:
@@ -213,10 +255,31 @@ def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[
         history = trim_history(_without_refused_turns(unsummarized))  # safety net only: normally already small thanks to the summary
 
     document_ids = conversation_document_ids(db, conversation.id) if conversation is not None else []
+
+    # Greetings, small talk and introductions ("hello, how are you? myself Dishant, what's your name?") get one
+    # friendly reply in ANY chat, with no search and no LLM call; self-facts are remembered at once. A message that
+    # also asks a real question is answered normally and its self-facts are saved after the turn.
+    analysis = analyze_message(request.query)
+    self_facts = analysis.facts
+    if analysis.only_social:
+        if conversation is None:
+            conversation = Conversation(user_id=user_id, title=request.query[:80])
+            db.add(conversation)
+            db.flush()  # gives the conversation an id (committed with the turn)
+        remembered, full = _remember_self_facts(user_id, self_facts, conversation.id) if self_facts else ([], False)
+        reply = social_reply(analysis, remembered, full, has_documents=bool(document_ids))
+        yield "token", reply
+        response, conversation = _save_turn(db, user_id, conversation, request.query, reply, [], False)
+        yield "done", response
+        return
+
     if not document_ids:
         reply, abstained = reply_without_documents(request.query)
         yield "token", reply
-        yield "done", _save_turn(db, user_id, conversation, request.query, reply, [], abstained)
+        response, conversation = _save_turn(db, user_id, conversation, request.query, reply, [], abstained)
+        if self_facts:
+            _remember_self_facts(user_id, self_facts, conversation.id)
+        yield "done", response
         return
 
     retrieval = run_retrieval(
@@ -244,22 +307,25 @@ def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[
         raise HTTPException(status_code=502, detail="The language model request failed, please try again")
 
     citations = [Citation(**asdict(citation)) for citation in generation.citations]
-    response = _save_turn(db, user_id, conversation, request.query, generation.answer, citations, generation.abstained)
-    conversation = db.get(Conversation, response.conversation_id)
+    response, conversation = _save_turn(db, user_id, conversation, request.query, generation.answer, citations, generation.abstained)
+    if self_facts:
+        _remember_self_facts(user_id, self_facts, conversation.id)
     yield "done", response
 
     # The answer is already saved and sent, so a problem here must never fail the request.
     # (If the client hung up after "done", this is skipped and tried again after the next question.)
     if _summarize_if_needed(db, conversation, llm):
         _remember_important_facts(user_id, conversation, llm)
+    else:
+        remember_if_due(db, user_id, conversation, llm)     # long chats: every few answers
 
 
 @traceable(
     name="ask",
-    process_inputs=lambda i: {"question": i["request"].query, "conversation_id": i["request"].conversation_id},
+    process_inputs=lambda i: {"question": i["request"].query, "conversation_id": str(i["request"].conversation_id) if i["request"].conversation_id else None},
     process_outputs=lambda r: {
         "answer": r.answer, "abstained": r.abstained, "citations": len(r.citations),
-        "conversation_id": r.conversation_id,
+        "conversation_id": str(r.conversation_id),
     },
 )
 def ask_question(db: Session, user_id: int, request: AskRequest, llm) -> AskResponse:

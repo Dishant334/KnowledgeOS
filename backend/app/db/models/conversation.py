@@ -1,6 +1,8 @@
+import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -12,6 +14,17 @@ class Conversation(Base):
     id: Mapped[int] = mapped_column(
         primary_key=True,
         index=True,
+    )
+
+    # The id the API and the URLs use (/chat/<uuid>): random, so it reveals nothing and cannot be guessed.
+    # The integer `id` above stays internal (foreign keys).
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        unique=True,
+        index=True,
+        nullable=False,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
     )
 
     user_id: Mapped[int] = mapped_column(
@@ -36,6 +49,13 @@ class Conversation(Base):
     # Messages with id <= this value are already covered by `summary`
     # (a plain number, not a foreign key: it only marks a position).
     summarized_until_message_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    # Messages with id <= this value were already given to the long-term memory step
+    # (services/conversation_memory.py), so they never cost a second LLM call.
+    remembered_until_message_id: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )

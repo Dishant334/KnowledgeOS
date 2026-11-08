@@ -7,6 +7,8 @@ import {
   discardConversationOnExit,
   getConversation,
   listConversationDocuments,
+  rememberConversation,
+  rememberConversationOnExit,
 } from '../../api/conversations'
 import Button from '../../components/Button'
 import ErrorBanner from '../../components/ErrorBanner'
@@ -18,6 +20,7 @@ import Composer from './Composer'
 import CitationPanel from './CitationPanel'
 import ConversationSidebar from './ConversationSidebar'
 import RenameDialog from './RenameDialog'
+import MemoryDialog from '../memory/MemoryDialog'
 import EmptyChat from './EmptyChat'
 import MessageList from './MessageList'
 import { toCitation } from './citations'
@@ -25,7 +28,8 @@ import { useConversations } from './useConversations'
 
 // The chat screen: conversations (left), the chat (middle), and a source panel (right) that exists only while a
 // citation is open. Documents are uploaded with the paperclip (chips above the question box) and belong to this chat;
-// questions stream their answer from POST /ask/stream. "/chat" is a new chat; "/chat/:id" opens a saved one.
+// questions stream their answer from POST /ask/stream. "/chat" is a new chat; "/chat/:id" opens a saved one
+// (the id is the conversation's random public UUID, a string, compared as a string everywhere).
 // After the first answer of a new chat the address becomes /chat/<its id> (the screen is NOT remounted: AppShell keys
 // the page by section, so the chat, its chips and any upload in progress stay as they are).
 export default function ChatLayout() {
@@ -57,18 +61,30 @@ export default function ChatLayout() {
   const uploads = useUploads(getConversationId) // owned here so uploads survive the box moving to the bottom
   const list = useConversations() // the sidebar
   const [renaming, setRenaming] = useState(null) // the conversation whose name is being edited
+  const [memoryOpen, setMemoryOpen] = useState(false)
 
   // A chat you leave without asking anything is removed with the files uploaded only into it (the backend refuses
   // once it has a message, and sweeps up any it missed after 2 hours). `hasMessages` turns true once the backend has
   // SAVED an answer in it (a stopped or failed question saves nothing).
   const hasMessages = useRef(false)
+  // answers saved in this chat during this visit: leaving it asks the backend to learn from them (long-term memory)
+  const newAnswers = useRef(0)
+  const leaveChat = useCallback((onExit = false) => {
+    const id = conversation.current.id
+    if (id && hasMessages.current && newAnswers.current > 0) {
+      newAnswers.current = 0
+      if (onExit) rememberConversationOnExit(id)
+      else rememberConversation(id)
+    }
+  }, [])
   const discardIfEmpty = useCallback((onExit = false) => {
+    leaveChat(onExit)
     const id = conversation.current.id
     if (!id || hasMessages.current) return
     conversation.current = { id: null, pending: null }
     if (onExit) discardConversationOnExit(id)
     else discardConversation(id).catch(() => {}) // a failure is harmless: the sweep removes it later
-  }, [])
+  }, [leaveChat])
 
   // leaving the page (tab closed, reload) or leaving the chat screen
   useEffect(() => {
@@ -97,11 +113,12 @@ export default function ChatLayout() {
   // Skipped when the address just changed to the chat already on screen (after the first answer of a new chat).
   const { showExisting } = uploads
   useEffect(() => {
-    if (!routeId || Number(routeId) === conversation.current.id) return
+    if (!routeId || routeId === conversation.current.id) return
     let alive = true
     streaming.current?.abort()
-    conversation.current = { id: Number(routeId), pending: null }
+    conversation.current = { id: routeId, pending: null }
     hasMessages.current = true // a saved chat is never discarded
+    newAnswers.current = 0
     setActive(null)
     setLoadState('loading')
     Promise.all([getConversation(routeId), listConversationDocuments(routeId)]).then(
@@ -168,8 +185,9 @@ export default function ChatLayout() {
         abstained: done.abstained,
       })
       hasMessages.current = true
+      newAnswers.current += 1
       list.refresh() // a new chat appears in the sidebar; an older one moves to the top
-      if (Number(routeId) !== done.conversation_id) navigate(`/chat/${done.conversation_id}`, { replace: !routeId })
+      if (routeId !== done.conversation_id) navigate(`/chat/${done.conversation_id}`, { replace: !routeId })
     } catch (error) {
       if (error.name === 'AbortError') {
         patchMessage(answerId, { status: 'stopped' })
@@ -202,6 +220,7 @@ export default function ChatLayout() {
     await list.remove(id)
     if (id === conversation.current.id) {
       hasMessages.current = true // already deleted: nothing to discard
+      newAnswers.current = 0 // ...and nothing to remember
       newChat()
     }
   }
@@ -263,7 +282,7 @@ export default function ChatLayout() {
       <ConversationSidebar
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        activeId={routeId ? Number(routeId) : null}
+        activeId={routeId ?? null}
         onSelect={openConversation}
         onNewChat={newChat}
         conversations={list.conversations}
@@ -274,11 +293,15 @@ export default function ChatLayout() {
           setRenaming(c)
         }}
         onDelete={deleteChat}
+        onOpenMemory={() => {
+          setDrawerOpen(false)
+          setMemoryOpen(true)
+        }}
       />
 
       {/* @container: children can react to the chat area's own width (the lamp needs room when it is narrow) */}
       <section className="@container relative isolate flex min-w-0 flex-1 flex-col">
-        <ChatBackground />
+        <ChatBackground calm={messages.length > 0 || loadState === 'loading'} />
         <ThemeLamp className="absolute right-6 top-0 z-20 md:right-10" />
         <div className="flex items-center gap-2 border-b border-stone-200 py-2 pl-3 pr-20 md:hidden">
           <button
@@ -292,7 +315,7 @@ export default function ChatLayout() {
             </svg>
           </button>
           <span className="truncate text-sm font-medium text-stone-700">
-            {list.conversations?.find((c) => c.id === Number(routeId))?.title ?? messages.find((m) => m.role === 'user')?.content ?? 'New chat'}
+            {list.conversations?.find((c) => c.id === routeId)?.title ?? messages.find((m) => m.role === 'user')?.content ?? 'New chat'}
           </span>
         </div>
 
@@ -319,6 +342,15 @@ export default function ChatLayout() {
           others={message.citations.filter((c) => c.n !== citation.n)}
           onClose={() => setActive(null)}
           onSwitch={(n) => setActive({ messageId: active.messageId, n })}
+        />
+      )}
+      {memoryOpen && (
+        <MemoryDialog
+          onClose={() => setMemoryOpen(false)}
+          onOpenConversation={(id) => {
+            setMemoryOpen(false)
+            openConversation(id)
+          }}
         />
       )}
       {renaming && (

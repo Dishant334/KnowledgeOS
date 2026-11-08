@@ -1,15 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from uuid import UUID
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.db.database import get_db
+from app.db.database import SessionLocal, get_db
+from app.db.models.conversation import Conversation
 from app.db.models.user import User
 from app.dependencies.auth import get_current_user
+from app.generation.llm import get_llm
+from app.services.conversation_memory import has_something_to_remember, remember_conversation
 from app.schemas.conversation import ConversationCreate, ConversationDetailOut, ConversationOut, ConversationRename
 from app.schemas.document import DocumentOut
 from app.services.conversations import (
     create_conversation,
     delete_conversation,
     discard_empty_conversation,
+    find_user_conversation,
     get_conversation,
     list_conversation_documents,
     list_conversations,
@@ -34,7 +40,7 @@ def conversations(
 
 @router.get("/{conversation_id}", response_model=ConversationDetailOut)
 def conversation(
-    conversation_id: int,
+    conversation_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -61,7 +67,7 @@ def new_conversation(
 
 @router.patch("/{conversation_id}", response_model=ConversationOut)
 def rename(
-    conversation_id: int,
+    conversation_id: UUID,
     body: ConversationRename,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -75,7 +81,7 @@ def rename(
 
 @router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete(
-    conversation_id: int,
+    conversation_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -89,7 +95,7 @@ def delete(
 
 @router.get("/{conversation_id}/documents", response_model=list[DocumentOut])
 def conversation_documents(
-    conversation_id: int,
+    conversation_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -102,7 +108,7 @@ def conversation_documents(
 
 @router.post("/{conversation_id}/discard", status_code=status.HTTP_204_NO_CONTENT)
 def discard(
-    conversation_id: int,
+    conversation_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -115,3 +121,33 @@ def discard(
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _remember_in_background(user_id: int, conversation_pk: int, llm) -> None:
+    """Runs after the response was sent, with its own database session (the request's one is closed by then)."""
+    with SessionLocal() as db:
+        conversation = db.get(Conversation, conversation_pk)   # the internal id
+        if conversation is not None and conversation.user_id == user_id:
+            remember_conversation(db, user_id, conversation, llm)
+
+
+@router.post("/{conversation_id}/remember", status_code=status.HTTP_202_ACCEPTED)
+def remember(
+    conversation_id: UUID,
+    background: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    llm=Depends(get_llm),
+):
+    """
+    "I am leaving this chat": learn what matters about you from its new messages (one LLM call, in the background)
+    and merge it into your long-term memory. Nothing to learn -> {"queued": false} and no LLM call.
+    """
+    try:
+        conversation = find_user_conversation(db, current_user.id, conversation_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    if not has_something_to_remember(db, conversation):
+        return {"queued": False}
+    background.add_task(_remember_in_background, current_user.id, conversation.id, llm)
+    return {"queued": True}

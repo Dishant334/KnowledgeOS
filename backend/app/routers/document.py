@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import (
     Form,
     APIRouter,
@@ -37,7 +39,7 @@ router = APIRouter(
 )
 async def upload_document(
     file: UploadFile = File(...),
-    conversation_id: int | None = Form(None),   # attach the file to this conversation (must be yours)
+    conversation_id: UUID | None = Form(None),   # attach the file to this conversation (must be yours)
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

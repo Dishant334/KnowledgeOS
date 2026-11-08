@@ -282,7 +282,7 @@ def test_linking_another_users_document_into_your_chat_still_retrieves_nothing_o
     db.commit()
     assert db.get(Document, OVERRIDE.document_id).user_id == alice.id
 
-    response = ask(client, bob, OVERRIDE.question, conversation_id=bobs_chat.id)
+    response = ask(client, bob, OVERRIDE.question, conversation_id=str(bobs_chat.public_id))
 
     assert OVERRIDE.canary not in "".join(calls)
     assert response["citations"] == []

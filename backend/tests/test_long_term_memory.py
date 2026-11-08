@@ -13,6 +13,7 @@ stored with LangGraph's PostgresStore in our Postgres.
 import json
 
 import pytest
+
 from langchain_core.runnables import RunnableLambda
 
 from app.db.models import Conversation, Message
@@ -22,7 +23,7 @@ from app.memory import store
 from app.memory.consolidate import MEMORY_PROMPT, parse_memory_list, update_long_term_memory
 from app.memory.store import MAX_MEMORIES_PER_USER, MAX_MEMORY_CHARS, clean_memory_text
 from app.services.ask import _history_as_text
-from tests.conftest import CORPUS_DOCUMENTS, attach_documents, auth_header, chat_with_documents, make_fake_llm, make_token, unique_clerk_id
+from tests.conftest import CORPUS_DOCUMENTS, attach_documents, auth_header, chat_with_documents, conversation_pk, conversation_public_id, make_fake_llm, make_token, unique_clerk_id
 from tests.test_llm import needs_ollama
 from tests.test_retrieve_ask_api import headers_for, use_llm, users  # noqa: F401  (fixtures)
 
@@ -109,8 +110,18 @@ def test_rewriter_text_starts_with_the_known_facts():
 
 def test_the_memory_prompt_tells_the_model_what_not_to_keep():
     text = MEMORY_PROMPT.format(max_items=15, memories="(nothing yet)", summary="s")
-    assert "Do NOT remember" in text and "passwords" in text and "facts that are in the documents" in text
+    assert "Never add" in text and "passwords" in text and "from the documents" in text
+    assert "questions are not facts" in text and "REPLACE the old fact" in text
     assert "JSON list" in text and "15 facts" in text
+
+
+def test_questions_the_model_writes_down_as_facts_are_dropped():
+    from app.memory.consolidate import NOT_A_FACT
+
+    for line in ["Asks about the parking fee", "asked about vacation days", "Wants to know the policy", "Works at a company"]:
+        assert NOT_A_FACT.search(line), line
+    for line in ["Works at Infosys", "Is preparing the onboarding guide", "Prefers short answers", "Name: Dishant"]:
+        assert not NOT_A_FACT.search(line), line
 
 
 # --- 2. the store (real Postgres) -------------------------------------------------------------------------
@@ -341,7 +352,7 @@ def ask(client, user, text, conversation_id=None):
         attach_documents(conversation_id, user.id, CORPUS_DOCUMENTS[user.id])
     else:
         conversation_id = chat_with_documents(user.id, CORPUS_DOCUMENTS[user.id])
-    return client.post("/ask", headers=headers_for(user), json={"query": text, "conversation_id": conversation_id})
+    return client.post("/ask", headers=headers_for(user), json={"query": text, "conversation_id": conversation_public_id(conversation_id)})
 
 
 def seed_long_conversation(db, user):
@@ -440,7 +451,7 @@ def test_a_failing_memory_update_never_fails_the_request(client, users, use_llm,
     assert resp.status_code == 200 and resp.json()["answer"] == "Twenty days [1]."
     assert texts(users[0].id) == []
     db.expire_all()
-    assert db.get(Conversation, cid).summary == "Summary."                          # the summary itself was still saved
+    assert db.get(Conversation, conversation_pk(cid)).summary == "Summary."                          # the summary itself was still saved
 
 
 def test_garbage_from_the_memory_model_changes_nothing(client, users, use_llm, db):

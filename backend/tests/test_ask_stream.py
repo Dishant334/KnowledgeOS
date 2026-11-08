@@ -9,11 +9,12 @@ several token events (the plain fake in conftest returns the whole answer in one
 import json
 
 import pytest
+
 from langchain_core.runnables import RunnableGenerator
 
 from app.db.models import Conversation, Message, User
 from app.generation.llm import get_llm
-from tests.conftest import auth_header, make_fake_llm, make_token, unique_clerk_id
+from tests.conftest import auth_header, conversation_pk, make_fake_llm, make_token, unique_clerk_id
 from tests.conftest import chat_with_documents
 from tests.test_retrieve_ask_api import chat, headers_for, use_llm, users  # noqa: F401  (shared fixtures)
 
@@ -88,7 +89,7 @@ def test_stream_sends_tokens_then_done_and_saves_the_turn(client, users, use_llm
     assert done["abstained"] is False and done["citations"][0]["marker"] == "[1]"
     assert {"conversation_id", "message_id", "created_at"} <= set(done)
 
-    messages = db.query(Message).filter_by(conversation_id=done["conversation_id"]).order_by(Message.id).all()
+    messages = db.query(Message).filter_by(conversation_id=conversation_pk(done["conversation_id"])).order_by(Message.id).all()
     assert [(m.role, m.content) for m in messages] == [("user", QUESTION), ("assistant", done["answer"])]
     assert messages[1].id == done["message_id"]
 
@@ -108,7 +109,7 @@ def test_stream_continues_an_existing_conversation(client, users, use_llm, db):
     second = parse_events(stream(client, users[0], conversation_id=first["conversation_id"]).text)[-1][1]
 
     assert second["conversation_id"] == first["conversation_id"]
-    assert db.query(Message).filter_by(conversation_id=first["conversation_id"]).count() == 4
+    assert db.query(Message).filter_by(conversation_id=conversation_pk(first["conversation_id"])).count() == 4
 
 
 def test_stream_unknown_or_foreign_conversation_is_a_real_404(client, users, use_llm, db):
@@ -119,9 +120,9 @@ def test_stream_unknown_or_foreign_conversation_is_a_real_404(client, users, use
     resp = stream(client, bob, conversation_id=conversation_id)
     assert resp.status_code == 404
     assert resp.headers["content-type"].startswith("application/json")      # an HTTP error, not a stream
-    assert db.query(Message).filter_by(conversation_id=conversation_id).count() == 2
+    assert db.query(Message).filter_by(conversation_id=conversation_pk(conversation_id)).count() == 2
 
-    assert stream(client, alice, conversation_id=99999).status_code == 404
+    assert stream(client, alice, conversation_id="00000000-0000-4000-8000-000000000000").status_code == 404
 
 
 def test_stream_model_refusal_replaces_the_preview_and_has_no_citations(client, users, use_llm):

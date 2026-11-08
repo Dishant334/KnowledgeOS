@@ -7,6 +7,7 @@ Conversation memory: old messages are summarized and stored, never dropped.
 """
 
 import pytest
+
 from langchain_core.runnables import RunnableLambda
 
 from app.db.models import Conversation, Message
@@ -19,7 +20,7 @@ from app.generation.orchestrator import (
 )
 from app.generation.summary import SUMMARY_MAX_WORDS, format_messages, split_for_summary, summarize
 from app.services.ask import _history_as_text
-from tests.conftest import CORPUS_DOCUMENTS, attach_documents, make_fake_llm
+from tests.conftest import CORPUS_DOCUMENTS, attach_documents, conversation_pk, conversation_public_id, make_fake_llm
 from tests.test_llm import needs_ollama
 # fixtures used below (users, use_llm) and helper
 from tests.test_retrieve_ask_api import headers_for, use_llm, users  # noqa: F401
@@ -122,12 +123,12 @@ def seed(db, user, labels, n=400):
 def ask(client, user, text, conversation_id):
     # questions only search the conversation's own documents: attach the user's corpus documents (idempotent)
     attach_documents(conversation_id, user.id, CORPUS_DOCUMENTS[user.id])
-    return client.post("/ask", headers=headers_for(user), json={"query": text, "conversation_id": conversation_id})
+    return client.post("/ask", headers=headers_for(user), json={"query": text, "conversation_id": conversation_public_id(conversation_id)})
 
 
 def stored(db, conversation_id):
     db.expire_all()
-    return db.get(Conversation, conversation_id)
+    return db.get(Conversation, conversation_pk(conversation_id))
 
 
 def prompts(calls, kind):
@@ -144,7 +145,7 @@ def test_long_conversation_is_summarized_stored_and_nothing_is_deleted(client, u
     assert resp.status_code == 200, resp.text
 
     conversation = stored(db, cid)
-    messages = db.query(Message).filter_by(conversation_id=cid).order_by(Message.id).all()
+    messages = db.query(Message).filter_by(conversation_id=conversation_pk(cid)).order_by(Message.id).all()
     assert len(messages) == 8                                              # 6 seeded + the new question and answer: none deleted
     assert conversation.summary == SUMMARY_TEXT
     assert conversation.summarized_until_message_id == messages[5].id      # the six old messages are covered
@@ -219,7 +220,7 @@ def test_failed_summary_never_fails_the_request_and_is_retried_next_time(client,
     first = ask(client, users[0], "How many vacation days do employees get?", cid)
     assert first.status_code == 200 and first.json()["answer"] == "Twenty days [1]."
     assert stored(db, cid).summary is None                                  # nothing half-written
-    assert db.query(Message).filter_by(conversation_id=cid).count() == 8    # and no message lost
+    assert db.query(Message).filter_by(conversation_id=conversation_pk(cid)).count() == 8    # and no message lost
 
     broken["on"] = False
     assert ask(client, users[0], "And how are they paid?", cid).status_code == 200
@@ -303,7 +304,7 @@ def test_real_qwen_end_to_end_long_conversation(client, users, use_llm, db):
     conversation = stored(db, cid)
     assert conversation.summary and "berlin" in conversation.summary.lower()
     assert count_tokens(conversation.summary) < 400
-    assert db.query(Message).filter_by(conversation_id=cid).count() == 8
+    assert db.query(Message).filter_by(conversation_id=conversation_pk(cid)).count() == 8
 
     second = ask(client, bob, "And how many vacation days do Berlin employees get?", cid)
     assert second.status_code == 200 and ("thirty" in second.json()["answer"].lower() or "30" in second.json()["answer"])

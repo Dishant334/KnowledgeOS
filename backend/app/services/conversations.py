@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import exists, func
@@ -21,9 +22,12 @@ logger = logging.getLogger(__name__)
 ABANDONED_AFTER = timedelta(hours=2)
 
 
-def _find(db: Session, user_id: int, conversation_id: int) -> Conversation:
-    """The user's own conversation, or LookupError (an unknown id and someone else's id look the same)."""
-    conversation = db.query(Conversation).filter_by(id=conversation_id, user_id=user_id).first()
+def _find(db: Session, user_id: int, conversation_id: UUID) -> Conversation:
+    """
+    The user's own conversation by its PUBLIC id (the UUID in routes and URLs), or LookupError
+    (an unknown id and someone else's id look the same).
+    """
+    conversation = db.query(Conversation).filter_by(public_id=conversation_id, user_id=user_id).first()
     if conversation is None:
         raise LookupError("Conversation not found")
     return conversation
@@ -35,7 +39,7 @@ def _row(db: Session, conversation: Conversation) -> ConversationOut:
         Message.conversation_id == conversation.id
     ).one()
     return ConversationOut(
-        id=conversation.id,
+        id=conversation.public_id,
         title=conversation.title,
         created_at=conversation.created_at,
         last_message_at=newest or conversation.created_at,
@@ -64,7 +68,7 @@ def list_conversations(db: Session, user_id: int, limit: int = 50, offset: int =
     )
     return [
         ConversationOut(
-            id=conversation.id,
+            id=conversation.public_id,
             title=conversation.title,
             created_at=conversation.created_at,
             last_message_at=newest,
@@ -86,7 +90,7 @@ def create_conversation(db: Session, user_id: int, title: str | None = None) -> 
     return _row(db, conversation)
 
 
-def rename_conversation(db: Session, user_id: int, conversation_id: int, title: str) -> ConversationOut:
+def rename_conversation(db: Session, user_id: int, conversation_id: UUID, title: str) -> ConversationOut:
     conversation = _find(db, user_id, conversation_id)
     conversation.title = title
     db.commit()
@@ -94,7 +98,7 @@ def rename_conversation(db: Session, user_id: int, conversation_id: int, title: 
     return _row(db, conversation)
 
 
-def delete_conversation(db: Session, user_id: int, conversation_id: int) -> None:
+def delete_conversation(db: Session, user_id: int, conversation_id: UUID) -> None:
     """
     Deletes the conversation with its messages and their saved citations (the relationship cascades) and its
     document links (ON DELETE CASCADE). The documents themselves, their vectors and the user's long-term memory
@@ -105,7 +109,7 @@ def delete_conversation(db: Session, user_id: int, conversation_id: int) -> None
     db.commit()
 
 
-def get_conversation(db: Session, user_id: int, conversation_id: int) -> ConversationDetailOut:
+def get_conversation(db: Session, user_id: int, conversation_id: UUID) -> ConversationDetailOut:
     """
     One conversation with all its messages (oldest first), each answer carrying its citations.
 
@@ -116,7 +120,7 @@ def get_conversation(db: Session, user_id: int, conversation_id: int) -> Convers
 
     messages = db.query(Message).filter_by(conversation_id=conversation.id).order_by(Message.id).all()
     return ConversationDetailOut(
-        id=conversation.id,
+        id=conversation.public_id,
         title=conversation.title,
         created_at=conversation.created_at,
         last_message_at=messages[-1].created_at if messages else conversation.created_at,
@@ -136,7 +140,7 @@ def get_conversation(db: Session, user_id: int, conversation_id: int) -> Convers
 # --- documents attached to a conversation --------------------------------------------------------------------
 
 
-def find_user_conversation(db: Session, user_id: int, conversation_id: int) -> Conversation:
+def find_user_conversation(db: Session, user_id: int, conversation_id: UUID) -> Conversation:
     """Public form of _find (LookupError for an unknown id or someone else's conversation)."""
     return _find(db, user_id, conversation_id)
 
@@ -157,7 +161,7 @@ def conversation_document_ids(db: Session, conversation_id: int) -> list[int]:
     return [document_id for (document_id,) in rows]
 
 
-def list_conversation_documents(db: Session, user_id: int, conversation_id: int) -> list[Document]:
+def list_conversation_documents(db: Session, user_id: int, conversation_id: UUID) -> list[Document]:
     """The user's conversation's documents, in the order they were attached (LookupError if not theirs)."""
     conversation = _find(db, user_id, conversation_id)
     return (
@@ -205,7 +209,7 @@ def _remove_empty(db: Session, user: User, conversation: Conversation) -> None:
     db.commit()
 
 
-def discard_empty_conversation(db: Session, user: User, conversation_id: int) -> None:
+def discard_empty_conversation(db: Session, user: User, conversation_id: UUID) -> None:
     """
     "I left this chat without asking anything": removes it and its own documents. Refused (409) once the chat has a
     message, so a late call (for example from a closing tab just after a question) can never delete a real chat.

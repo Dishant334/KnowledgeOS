@@ -13,7 +13,7 @@ import pytest
 from app.augmentation.citation_mapper import SNIPPET_CHARS, make_snippet
 from app.db.models import Conversation, Message
 from app.memory import store
-from tests.conftest import CORPUS_DOCUMENTS, attach_documents, chat_with_documents, make_fake_llm
+from tests.conftest import CORPUS_DOCUMENTS, attach_documents, chat_with_documents, conversation_pk, conversation_public_id, make_fake_llm
 from tests.test_ask_stream import make_streaming_llm, parse_events
 from tests.test_retrieve_ask_api import headers_for, use_llm, users  # noqa: F401  (shared fixtures)
 
@@ -24,6 +24,7 @@ ANSWER = "Employees get twenty days of paid vacation [1]."
 def ask(client, user, **payload):
     """Asks QUESTION into the given conversation (its documents attached) or into a new chat with the user's documents."""
     if "conversation_id" in payload:
+        payload["conversation_id"] = conversation_public_id(payload["conversation_id"])
         attach_documents(payload["conversation_id"], user.id, CORPUS_DOCUMENTS[user.id])
     else:
         payload["conversation_id"] = chat_with_documents(user.id, CORPUS_DOCUMENTS[user.id])
@@ -106,7 +107,7 @@ def test_answers_saved_before_citations_were_stored_come_back_with_an_empty_list
     db.add(Message(conversation_id=conversation.id, role="assistant", content="old answer [1]"))   # citations NULL
     db.commit()
 
-    messages = get_conversation(client, users[0], conversation.id).json()["messages"]
+    messages = get_conversation(client, users[0], conversation.public_id).json()["messages"]
     assert [m["citations"] for m in messages] == [[], []]
 
 
@@ -124,7 +125,7 @@ def test_another_users_or_unknown_conversation_is_404(client, users, use_llm):
     conversation_id = ask(client, alice)["conversation_id"]
 
     assert get_conversation(client, bob, conversation_id).status_code == 404
-    assert get_conversation(client, alice, 99999).status_code == 404
+    assert get_conversation(client, alice, "00000000-0000-4000-8000-000000000000").status_code == 404
     assert get_conversation(client, alice, conversation_id).status_code == 200
 
 
@@ -300,7 +301,7 @@ def test_rename_is_limited_to_the_owner(client, users):
     chat = create(client, alice, title="alice's chat").json()
 
     assert rename(client, bob, chat["id"], "hacked").status_code == 404
-    assert rename(client, alice, 99999, "x").status_code == 404
+    assert rename(client, alice, "00000000-0000-4000-8000-000000000000", "x").status_code == 404
     assert client.patch(f"/conversations/{chat['id']}", json={"title": "x"}).status_code == 401
     assert get_conversation(client, alice, chat["id"]).json()["title"] == "alice's chat"
 
@@ -311,7 +312,7 @@ def test_rename_is_limited_to_the_owner(client, users):
 def test_delete_removes_the_conversation_its_messages_and_citations(client, users, use_llm, db):
     use_llm(make_fake_llm(answer=ANSWER))
     conversation_id = ask(client, users[0])["conversation_id"]
-    assert db.query(Message).filter_by(conversation_id=conversation_id).count() == 2
+    assert db.query(Message).filter_by(conversation_id=conversation_pk(conversation_id)).count() == 2
 
     resp = client.delete(f"/conversations/{conversation_id}", headers=headers_for(users[0]))
     assert resp.status_code == 204 and resp.content == b""
@@ -319,15 +320,15 @@ def test_delete_removes_the_conversation_its_messages_and_citations(client, user
     assert get_conversation(client, users[0], conversation_id).status_code == 404
     assert client.get("/conversations", headers=headers_for(users[0])).json() == []
     db.expire_all()
-    assert db.query(Conversation).filter_by(id=conversation_id).count() == 0
-    assert db.query(Message).filter_by(conversation_id=conversation_id).count() == 0     # citations went with them
+    assert db.query(Conversation).filter_by(public_id=conversation_id).count() == 0
+    assert db.query(Message).filter_by(conversation_id=conversation_pk(conversation_id)).count() == 0     # citations went with them
 
 
 def test_delete_twice_or_unknown_is_404(client, users):
     chat = create(client, users[0]).json()
     assert client.delete(f"/conversations/{chat['id']}", headers=headers_for(users[0])).status_code == 204
     assert client.delete(f"/conversations/{chat['id']}", headers=headers_for(users[0])).status_code == 404
-    assert client.delete("/conversations/99999", headers=headers_for(users[0])).status_code == 404
+    assert client.delete(f"/conversations/{"00000000-0000-4000-8000-000000000000"}", headers=headers_for(users[0])).status_code == 404
 
 
 def test_delete_is_limited_to_the_owner(client, users, use_llm):
@@ -354,7 +355,7 @@ def test_delete_keeps_documents_and_long_term_memory(client, users, use_llm):
     use_llm(make_fake_llm(answer=ANSWER))
     alice = users[0]
     conversation_id = ask(client, alice)["conversation_id"]
-    store.add_memory(alice.id, "Works in the Berlin office", conversation_id)
+    store.add_memory(alice.id, "Works in the Berlin office", conversation_pk(conversation_id))
 
     assert client.delete(f"/conversations/{conversation_id}", headers=headers_for(alice)).status_code == 204
 
@@ -409,7 +410,7 @@ def test_the_same_file_in_a_second_chat_attaches_the_existing_document(client, u
 
     assert a["id"] == b["id"]                                         # one document, two chats
     links = {(link.conversation_id, link.uploaded_here) for link in db.query(ConversationDocument).all()}
-    assert links == {(first, True), (second, False)}                  # only the first chat created it
+    assert links == {(conversation_pk(first), True), (conversation_pk(second), False)}                  # only the first chat created it
 
 
 @pytest.mark.usefixtures("no_dispatch")
@@ -418,7 +419,7 @@ def test_uploading_into_someone_elses_chat_is_404_and_saves_nothing(client, user
 
     alices_chat = create(client, users[0]).json()["id"]
     assert upload(client, users[1], "x.txt", b"bob", alices_chat).status_code == 404
-    assert upload(client, users[0], "x.txt", b"alice", 99999).status_code == 404
+    assert upload(client, users[0], "x.txt", b"alice", "00000000-0000-4000-8000-000000000000").status_code == 404
     assert db.query(Document).count() == 0
     assert client.get(f"/conversations/{alices_chat}/documents", headers=headers_for(users[1])).status_code == 404
 
@@ -470,7 +471,7 @@ def test_discarding_an_empty_chat_deletes_it_with_the_files_uploaded_only_into_i
 
     assert client.post(f"/conversations/{empty}/discard", headers=headers_for(users[0])).status_code == 204
 
-    assert db.get(Conversation, empty) is None
+    assert db.get(Conversation, conversation_pk(empty)) is None
     remaining = {d.id for d in db.query(Document).all()}
     assert own["id"] not in remaining                                         # created in that chat: gone
     assert {shared["id"], library["id"]} <= remaining                         # used elsewhere / already in library: kept
@@ -498,12 +499,33 @@ def test_old_empty_chats_are_swept_away_with_their_own_files(client, users, db, 
     fresh = create(client, users[0]).json()["id"]
     used = ask(client, users[0])["conversation_id"]
     stale_doc = upload(client, users[0], "stale.txt", b"left behind", stale).json()
-    db.query(Conversation).filter_by(id=stale).update({"created_at": datetime.utcnow() - ABANDONED_AFTER - timedelta(minutes=1)})
+    db.query(Conversation).filter_by(public_id=stale).update({"created_at": datetime.utcnow() - ABANDONED_AFTER - timedelta(minutes=1)})
     db.commit()
 
     listed = client.get("/conversations", headers=headers_for(users[0])).json()       # the list request sweeps
 
     assert [c["id"] for c in listed] == [used]
     db.expire_all()
-    assert db.get(Conversation, stale) is None and db.get(Document, stale_doc["id"]) is None
-    assert db.get(Conversation, fresh) is not None                                     # recent empty chat: kept for now
+    assert db.get(Conversation, conversation_pk(stale)) is None and db.get(Document, stale_doc["id"]) is None
+    assert db.get(Conversation, conversation_pk(fresh)) is not None                                     # recent empty chat: kept for now
+
+
+# --- public conversation ids -------------------------------------------------------------------------------------
+
+
+def test_conversation_ids_are_random_uuids_and_integer_ids_are_refused(client, users, use_llm):
+    import uuid
+
+    use_llm(make_fake_llm(answer=ANSWER))
+    first = ask(client, users[0])["conversation_id"]
+    second = ask(client, users[0])["conversation_id"]
+
+    for public in (first, second):
+        assert uuid.UUID(public).version == 4                                   # random, not 1, 2, 3...
+    listed = [c["id"] for c in client.get("/conversations", headers=headers_for(users[0])).json()]
+    assert set(listed) == {first, second}
+
+    internal = conversation_pk(first)                                           # the database's own number
+    assert get_conversation(client, users[0], internal).status_code == 422      # is never accepted by the API
+    assert client.post("/ask", headers=headers_for(users[0]), json={"query": QUESTION, "conversation_id": internal}).status_code == 422
+    assert get_conversation(client, users[0], first).status_code == 200

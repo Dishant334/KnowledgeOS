@@ -31,6 +31,7 @@ export default function ConversationSidebar({
   onRetry,
   onRename,
   onDelete,
+  onOpenMemory,
 }) {
   const { theme } = useTheme()
   const grouped = GROUP_ORDER.map((name) => ({
@@ -51,7 +52,21 @@ export default function ConversationSidebar({
           <Link to="/chat" onClick={onNewChat} className="font-display text-xl font-semibold tracking-tight text-accent-ink">
             KnowledgeOS
           </Link>
-          <UserButton appearance={theme === 'dark' ? { variables: clerkDarkVariables } : undefined} />
+          <span className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={onOpenMemory}
+              aria-label="What I remember about you"
+              title="What I remember about you"
+              className="grid size-8 place-items-center rounded-lg text-stone-600 transition hover:bg-stone-200/70 hover:text-accent-ink focus-visible:outline-2 focus-visible:outline-brand-700"
+            >
+              <svg viewBox="0 0 20 20" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M7.5 3.5a3 3 0 00-3 3v.3A2.8 2.8 0 003 9.4a2.8 2.8 0 001.2 2.3A3 3 0 007.5 16a2.5 2.5 0 002.5-2.5v-7.5a2.5 2.5 0 00-2.5-2.5z" />
+                <path d="M12.5 3.5a3 3 0 013 3v.3a2.8 2.8 0 011.5 2.6 2.8 2.8 0 01-1.2 2.3 3 3 0 01-3.3 4.3 2.5 2.5 0 01-2.5-2.5" />
+              </svg>
+            </button>
+            <UserButton appearance={theme === 'dark' ? { variables: clerkDarkVariables } : undefined} />
+          </span>
         </div>
 
         <div className="p-3">

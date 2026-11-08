@@ -46,8 +46,23 @@ const THREAD = threadPath(LETTERS)
 const RADIUS = 220 // px: how far the mouse reaches
 const PUSH = 44 // px: the furthest a letter moves away
 
-export default function ChatBackground() {
+// `calm` (a conversation is on screen): the whole layer fades to about a third, the thread hides, the letters stop
+// floating and stop reacting to the mouse, so long answers are easy to read. The empty chat shows them at full strength.
+export default function ChatBackground({ calm = false }) {
   const layer = useRef(null)
+  const calmRef = useRef(calm)
+
+  // turning calm on: remember it for the mouse handler and send every letter back to rest
+  useEffect(() => {
+    calmRef.current = calm
+    if (!calm) return
+    for (const letter of layer.current?.querySelectorAll('[data-letter]') ?? []) {
+      const target = letter.firstElementChild
+      target.style.setProperty('--tx', '0px')
+      target.style.setProperty('--ty', '0px')
+      target.style.setProperty('--near', '0')
+    }
+  }, [calm])
 
   useEffect(() => {
     const el = layer.current
@@ -78,6 +93,7 @@ export default function ChatBackground() {
       if (!frame) frame = requestAnimationFrame(update)
     }
     const onMove = (e) => {
+      if (calmRef.current) return // a conversation is on screen: the letters stay still
       mouse = { x: e.clientX, y: e.clientY }
       schedule()
     }
@@ -99,7 +115,7 @@ export default function ChatBackground() {
     <div
       ref={layer}
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 -z-10 overflow-hidden select-none"
+      className={`chat-bg pointer-events-none absolute inset-0 -z-10 overflow-hidden select-none ${calm ? 'chat-bg-calm' : ''}`}
       style={{ containerType: 'size' }}
     >
       {/* the thread that links the letters in order (faded out in the middle, behind the heading and box) */}

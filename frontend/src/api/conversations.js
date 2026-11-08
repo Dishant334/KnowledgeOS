@@ -56,3 +56,20 @@ export function discardConversationOnExit(conversationId) {
     headers: { Authorization: `Bearer ${token}` },
   }).catch(() => {})
 }
+
+// "I am leaving this chat": the backend learns what matters about you from its new messages (one LLM call, in the
+// background) and merges it into your long-term memory. Nothing new -> nothing happens. Errors are ignored.
+export function rememberConversation(conversationId) {
+  api.post(`/conversations/${conversationId}/remember`).catch(() => {})
+}
+
+// The same while the page is closing (fetch keepalive with the last token, like discardConversationOnExit).
+export function rememberConversationOnExit(conversationId) {
+  const token = peekAuthToken()
+  if (!token) return
+  fetch(`${api.defaults.baseURL}/conversations/${conversationId}/remember`, {
+    method: 'POST',
+    keepalive: true,
+    headers: { Authorization: `Bearer ${token}` },
+  }).catch(() => {})
+}

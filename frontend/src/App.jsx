@@ -6,7 +6,6 @@ import SignUpPage from './auth/SignUpPage'
 import AppShell from './layout/AppShell'
 import ThemeProvider from './theme/ThemeProvider'
 import ChatLayout from './features/chat/ChatLayout'
-import ComingSoonPage from './pages/ComingSoonPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 // The route table. Sign-in and sign-up share the AuthLayout card; everything inside <RequireAuth> needs a login;
@@ -25,8 +24,9 @@ export default function App() {
             <Route index element={<Navigate to="/chat" replace />} />
             <Route path="chat" element={<ChatLayout />} />
             <Route path="chat/:conversationId" element={<ChatLayout />} />
-            <Route path="documents" element={<ComingSoonPage title="Documents" step={2} />} />
-            <Route path="memory" element={<ComingSoonPage title="Memory" step={5} />} />
+            {/* documents live in each chat (chips) and memory in a dialog: old addresses go to the chat */}
+            <Route path="documents" element={<Navigate to="/chat" replace />} />
+            <Route path="memory" element={<Navigate to="/chat" replace />} />
           </Route>
         </Route>
   

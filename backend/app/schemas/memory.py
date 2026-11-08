@@ -1,3 +1,4 @@
+from uuid import UUID
 from datetime import datetime
 from typing import Optional
 
@@ -12,4 +13,4 @@ class MemoryOut(BaseModel):
     id: str
     text: str
     created_at: datetime
-    source_conversation_id: Optional[int] = None   # the conversation it was learned from (None if added by hand)
+    source_conversation_id: Optional[UUID] = None  # public id of the chat it was learned from (None if added by hand)

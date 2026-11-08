@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -22,9 +23,9 @@ class ConversationRename(BaseModel):
 
 
 class ConversationOut(BaseModel):
-    """One row of the conversation list (the sidebar)."""
+    """One row of the conversation list (the sidebar). `id` is the conversation's public UUID."""
 
-    id: int
+    id: UUID
     title: str | None
     created_at: datetime
     last_message_at: datetime        # when the newest message was written (the list is sorted by this)
@@ -48,7 +49,7 @@ class MessageOut(BaseModel):
 class ConversationDetailOut(BaseModel):
     """A whole conversation: everything the chat screen needs in a single request."""
 
-    id: int
+    id: UUID
     title: str | None
     created_at: datetime
     last_message_at: datetime

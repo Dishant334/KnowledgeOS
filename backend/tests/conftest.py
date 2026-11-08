@@ -347,8 +347,34 @@ def make_fake_llm(answer="Employees get twenty days of paid vacation [1].", rewr
 # missing. They open their own session, so test helpers that only receive (client, user) can call them.
 
 
-def attach_documents(conversation_id: int, user_id: int, document_ids) -> None:
-    """Attaches documents (creating minimal `documents` rows for ids that have none) to an existing conversation."""
+def conversation_pk(conversation_id) -> int:
+    """The INTERNAL integer id of a conversation, given its public UUID (or an internal id, returned as is)."""
+    if isinstance(conversation_id, int):
+        return conversation_id
+    from app.db.database import SessionLocal
+    from app.db.models import Conversation
+
+    with SessionLocal() as session:
+        return session.query(Conversation.id).filter_by(public_id=str(conversation_id)).scalar()
+
+
+def conversation_public_id(conversation_id) -> str:
+    """The PUBLIC id (UUID string) the API expects, given an internal integer id (or a public id, returned as is)."""
+    if not isinstance(conversation_id, int):
+        return str(conversation_id)
+    from app.db.database import SessionLocal
+    from app.db.models import Conversation
+
+    with SessionLocal() as session:
+        return str(session.query(Conversation.public_id).filter_by(id=conversation_id).scalar())
+
+
+def attach_documents(conversation_id, user_id: int, document_ids) -> None:
+    """
+    Attaches documents (creating minimal `documents` rows for ids that have none) to an existing conversation,
+    given by its public UUID (as the API returns it) or its internal id.
+    """
+    conversation_id = conversation_pk(conversation_id)
     from sqlalchemy import text
     from sqlalchemy.dialects.postgresql import insert
 
@@ -374,8 +400,8 @@ def attach_documents(conversation_id: int, user_id: int, document_ids) -> None:
         session.commit()
 
 
-def chat_with_documents(user_id: int, document_ids) -> int:
-    """A new (untitled) conversation of the user with these documents attached; returns its id."""
+def chat_with_documents(user_id: int, document_ids) -> str:
+    """A new (untitled) conversation of the user with these documents attached; returns its PUBLIC id (a UUID string)."""
     from app.db.database import SessionLocal
     from app.db.models import Conversation
 
@@ -383,9 +409,9 @@ def chat_with_documents(user_id: int, document_ids) -> int:
         conversation = Conversation(user_id=user_id)
         session.add(conversation)
         session.commit()
-        conversation_id = conversation.id
+        conversation_id, public_id = conversation.id, str(conversation.public_id)
     attach_documents(conversation_id, user_id, document_ids)
-    return conversation_id
+    return public_id
 
 
 # which documents each user owns in the shared retrieval corpus (CORPUS above)

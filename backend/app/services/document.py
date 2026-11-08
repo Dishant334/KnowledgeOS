@@ -1,3 +1,4 @@
+from uuid import UUID
 import logging
 
 from fastapi import HTTPException, UploadFile
@@ -58,7 +59,7 @@ async def create_document(
     db: Session,
     user: User,
     file: UploadFile,
-    conversation_id: int | None = None,
+    conversation_id: UUID | None = None,
 ) -> Document:
     """
     Saves an upload (or returns the user's existing copy of the same file) and, when conversation_id is given,
@@ -67,15 +68,16 @@ async def create_document(
     """
     from app.services.conversations import find_user_conversation, link_document
 
+    conversation = None
     if conversation_id is not None:
         try:
-            find_user_conversation(db, user.id, conversation_id)
+            conversation = find_user_conversation(db, user.id, conversation_id)
         except LookupError:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
     document, created = await _save_document(db, user, file)
-    if conversation_id is not None:
-        link_document(db, conversation_id, document.id, uploaded_here=created)
+    if conversation is not None:
+        link_document(db, conversation.id, document.id, uploaded_here=created)   # links use the internal id
     return document
 
 

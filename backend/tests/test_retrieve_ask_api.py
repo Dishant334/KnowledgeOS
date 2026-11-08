@@ -14,7 +14,7 @@ import pytest
 
 from app.db.models import Conversation, Message, User
 from app.generation.llm import get_llm
-from tests.conftest import CORPUS_DOCUMENTS, auth_header, chat_with_documents, make_fake_llm, make_token, unique_clerk_id
+from tests.conftest import CORPUS_DOCUMENTS, auth_header, chat_with_documents, conversation_pk, make_fake_llm, make_token, unique_clerk_id
 
 
 @pytest.fixture
@@ -169,7 +169,7 @@ def test_ask_answers_with_citations_and_saves_the_turn(client, users, use_llm, d
     assert first["source_name"] == "handbook.pdf" and first["page_number"] == 1
     assert {c["document_id"] for c in body["citations"]} <= {10, 11}   # only Alice's documents
 
-    messages = db.query(Message).filter_by(conversation_id=body["conversation_id"]).order_by(Message.id).all()
+    messages = db.query(Message).filter_by(conversation_id=conversation_pk(body["conversation_id"])).order_by(Message.id).all()
     assert [(m.role, m.content) for m in messages] == [
         ("user", "How many vacation days do employees get?"),
         ("assistant", body["answer"]),
@@ -231,7 +231,7 @@ def test_ask_cannot_use_another_users_conversation(client, users, use_llm, db):
     resp = client.post("/ask", headers=headers_for(bob),
                        json={"query": "vacation days?", "conversation_id": conversation_id})
     assert resp.status_code == 404
-    assert db.query(Message).filter_by(conversation_id=conversation_id).count() == 2   # unchanged
+    assert db.query(Message).filter_by(conversation_id=conversation_pk(conversation_id)).count() == 2   # unchanged
 
 
 def test_ask_never_cites_other_users_documents(client, users, use_llm):
@@ -354,7 +354,7 @@ def test_ask_multi_turn_conversation_with_real_qwen(client, users, use_llm, db):
     assert second.json()["conversation_id"] == first["conversation_id"]
     assert "january" in second.json()["answer"].lower()
 
-    saved = db.query(Message).filter_by(conversation_id=first["conversation_id"]).order_by(Message.id).all()
+    saved = db.query(Message).filter_by(conversation_id=conversation_pk(first["conversation_id"])).order_by(Message.id).all()
     assert [m.role for m in saved] == ["user", "assistant", "user", "assistant"]
 
 
@@ -388,18 +388,26 @@ def test_without_documents_a_real_question_asks_for_a_document_and_never_searche
 
     assert body["answer"] == NEED_DOCUMENT_REPLY and body["abstained"] is True and body["citations"] == []
     assert calls == []                                               # no LLM call at all
-    saved = db.query(Message).filter_by(conversation_id=body["conversation_id"]).order_by(Message.id).all()
+    saved = db.query(Message).filter_by(conversation_id=conversation_pk(body["conversation_id"])).order_by(Message.id).all()
     assert [m.role for m in saved] == ["user", "assistant"]          # still a normal, saved turn
 
 
-@pytest.mark.parametrize("greeting", ["hi", "Hello!", "hey there", "good morning", "thanks", "who are you?"])
-def test_without_documents_small_talk_gets_a_hello(client, users, use_llm, greeting):
+@pytest.mark.parametrize("greeting", ["hi", "Hello!", "hey there", "good morning"])
+def test_without_documents_a_greeting_gets_the_welcome(client, users, use_llm, greeting):
     from app.services.small_talk import GREETING_REPLY
 
     calls = []
     use_llm(make_fake_llm(calls=calls))
     body = client.post("/ask", headers=headers_for(users[0]), json={"query": greeting}).json()
     assert body["answer"] == GREETING_REPLY and body["abstained"] is False and calls == []
+
+
+@pytest.mark.parametrize("message, expected", [("thanks", "You're welcome!"), ("who are you?", "I'm KnowledgeOS")])
+def test_without_documents_other_small_talk_gets_a_matching_reply(client, users, use_llm, message, expected):
+    calls = []
+    use_llm(make_fake_llm(calls=calls))
+    body = client.post("/ask", headers=headers_for(users[0]), json={"query": message}).json()
+    assert expected in body["answer"] and body["abstained"] is False and calls == []
 
 
 def test_small_talk_detection():
@@ -422,7 +430,7 @@ def test_an_earlier_refusal_in_the_chat_is_left_out_of_the_prompt(client, users,
     for role, content in [("user", "hi"), ("assistant", GREETING_REPLY),
                           ("user", "what is this about"), ("assistant", "I don't have enough information to answer that."),
                           ("user", "Who wrote the handbook?"), ("assistant", "The handbook was written by HR [1].")]:
-        db.add(Message(conversation_id=conversation_id, role=role, content=content))
+        db.add(Message(conversation_id=conversation_pk(conversation_id), role=role, content=content))
     db.commit()
 
     resp = client.post("/ask", headers=headers_for(users[0]),
