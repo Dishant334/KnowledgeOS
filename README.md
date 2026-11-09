@@ -51,8 +51,17 @@ Upload PDFs, Word, PowerPoint, Excel, CSV, Markdown or HTML files into a chat an
 ![KnowledgeOS architecture](docs/architecture.png)
 
 **Memory** has two layers:
-- **Inside one chat:** once the unsummarised messages pass 1,500 tokens, the older ones are folded into a rolling summary.
-- **Across all chats:** up to 15 facts in a LangGraph `PostgresStore`. The LLM learns them when you leave a chat, or every 6 answers. Introductions such as "myself Dishant" are stored instantly by a rule-based parser.
+
+- **Short-term memory (one chat).** This is what the assistant remembers inside the current conversation.
+  - Recent messages are sent to the model as they are.
+  - Once the messages that aren't summarised yet pass **1,500 tokens**, the LLM folds the older ones into a **rolling summary**, stored on the conversation in Postgres.
+  - Each prompt gets the summary plus the newest ~800 tokens of messages.
+  - Nothing is ever deleted, so a long chat keeps its context without overflowing the prompt.
+- **Long-term memory (all chats).** This is what the assistant remembers about *you* across every conversation.
+  - Up to **15 short facts**, such as your name, role, ongoing projects and preferences, stored in a LangGraph `PostgresStore`.
+  - The LLM picks out durable facts when you leave a chat, or after every 6 answers. Introductions like "myself Dishant" are saved instantly by a rule-based parser.
+  - Secrets and instruction-like text are refused.
+  - You can view, add and delete facts in the "What I remember about you" dialog.
 
 ## How the RAG pipeline works
 
