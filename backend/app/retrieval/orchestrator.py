@@ -90,7 +90,10 @@ def retrieve(
     variants = [question]
     if llm is not None:
         rewritten_query = rewrite_question(llm, question, history)
-        variants = make_query_variants(llm, rewritten_query, config.num_query_variants)
+        if config.num_query_variants > 0:
+            variants = make_query_variants(llm, rewritten_query, config.num_query_variants)
+        else:
+            variants = [rewritten_query]   # no paraphrase call (the default)
 
     # step 3: hybrid search for each variant, always restricted to this user's chunks
     qdrant_filter = build_qdrant_filter(

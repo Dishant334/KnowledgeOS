@@ -190,12 +190,25 @@ def test_retrieve_with_llm_rewrites_followups_and_uses_variants(retrieval_corpus
         calls=calls,
     )
     result = retrieve("and for employees?", user_id=USER_1, llm=llm,
-                      history="User: Tell me about leave.\nAssistant: We have a leave policy.")
+                      history="User: Tell me about leave.\nAssistant: We have a leave policy.",
+                      retrieval_config=RetrievalConfig(num_query_variants=2))         # paraphrases are opt-in
 
     assert result.rewritten_query == "How many vacation days do employees get?"
     assert result.query_variants == [result.rewritten_query, "paid vacation days", "annual leave allowance"]
     assert "twenty days of paid vacation" in result.chunks[0].document.page_content
     assert any("Tell me about leave" in prompt for prompt in calls)   # history reached the rewriter
+
+
+def test_by_default_the_question_is_rewritten_but_not_paraphrased(retrieval_corpus):
+    """Paraphrases are off by default: same accuracy on the eval, ~7 s faster (see RetrievalConfig)."""
+    calls = []
+    llm = make_fake_llm(rewritten="How many vacation days do employees get?", variants=["unused"], calls=calls)
+    result = retrieve("and for employees?", user_id=USER_1, llm=llm, history="User: Tell me about leave.")
+
+    assert result.query_variants == ["How many vacation days do employees get?"]
+    assert not any("different phrasings" in prompt for prompt in calls)            # no paraphrase call at all
+    assert any("Standalone query" in prompt for prompt in calls)                   # the rewrite still runs
+    assert "twenty days of paid vacation" in result.chunks[0].document.page_content
 
 
 def test_retrieve_survives_a_broken_llm(retrieval_corpus):

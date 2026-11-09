@@ -11,6 +11,8 @@ import subprocess
 import sys
 
 import pytest
+
+from app.retrieval.model import RetrievalConfig
 from langsmith import Client, tracing_context
 
 from app.core.tracing import PREVIEW_CHARS
@@ -123,7 +125,8 @@ def test_generate_answer_trace_has_a_safe_summary_and_nested_llm_calls(recorder)
 def test_retrieval_trace_shows_the_retrieved_chunks_scores_and_stages(recorder, retrieval_corpus):
     llm = make_fake_llm(variants=["paid vacation days"])
     with recorder.tracing():
-        retrieve("How many vacation days do employees get?", user_id=1, llm=llm)
+        retrieve("How many vacation days do employees get?", user_id=1, llm=llm,
+                 retrieval_config=RetrievalConfig(num_query_variants=1))     # paraphrases are opt-in
 
     [root] = recorder.by_name("retrieve")
     assert root["inputs"] == {"question": "How many vacation days do employees get?", "doc_type": None, "document_ids": None,
