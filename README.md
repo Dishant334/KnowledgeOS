@@ -28,6 +28,7 @@ Upload PDFs, Word, PowerPoint, Excel, CSV, Markdown or HTML files into a chat an
 
 - [What it does](#what-it-does)
 - [Architecture](#architecture)
+- [How the RAG pipeline works](#how-the-rag-pipeline-works)
 - [Engineering decisions](#engineering-decisions)
 - [Screenshots](#screenshots)
 - [Results](#results)
@@ -35,7 +36,6 @@ Upload PDFs, Word, PowerPoint, Excel, CSV, Markdown or HTML files into a chat an
 - [Tech stack](#tech-stack)
 - [Running it locally](#running-it-locally)
 - [Project structure](#project-structure)
-- [Limitations and roadmap](#limitations-and-roadmap)
 
 ## What it does
 
@@ -50,24 +50,61 @@ Upload PDFs, Word, PowerPoint, Excel, CSV, Markdown or HTML files into a chat an
 
 ![KnowledgeOS architecture](docs/architecture.png)
 
-**Reading a document** runs in the background:
-1. `POST /documents` checks the type, the 20 MB limit and duplicates (by hash).
-2. It stores the file and queues a Celery task through Redis.
-3. The worker loads the file, runs OCR on scanned pages (Tesseract), cleans the text and splits it into 512-token chunks. Spreadsheet chunks never span two sheets.
-4. Each chunk is embedded twice, as a dense `bge-large` vector and a sparse BM25 vector, and stored in Qdrant.
-5. The chat chip moves from *Uploading* to *Reading* to ready.
-
-**Answering a question** (`POST /ask/stream`):
-1. Greetings and introductions are answered at once, with no model call.
-2. A follow-up is rewritten into a standalone question using the chat history.
-3. Hybrid search: dense and BM25 results are fused with reciprocal rank fusion inside Qdrant. They're filtered to **your user id** and **this chat's documents**.
-4. A cross-encoder (`bge-reranker-base`) keeps the best 5 passages.
-5. The prompt is built within a 3,000-token budget, with numbered sources marked as untrusted, plus your memory and the chat summary.
-6. The LLM streams tokens over server-sent events. Citation numbers are mapped back to their real sources in code, and the turn is saved with its citations.
-
 **Memory** has two layers:
 - **Inside one chat:** once the unsummarised messages pass 1,500 tokens, the older ones are folded into a rolling summary.
 - **Across all chats:** up to 15 facts in a LangGraph `PostgresStore`. The LLM learns them when you leave a chat, or every 6 answers. Introductions such as "myself Dishant" are stored instantly by a rule-based parser.
+
+## How the RAG pipeline works
+
+**RAG (retrieval-augmented generation)** means the model doesn't answer from what it memorised during training. For every question it is handed the most relevant passages from *your* documents and told to answer only from them. KnowledgeOS does this in four stages. The first runs once per document; the other three run on every question.
+
+```
+ INGESTION            RETRIEVAL                 AUGMENTATION            GENERATION
+ (once per file)      (every question)          (every question)        (every question)
+ file -> chunks ->    question -> rewrite ->    best 5 passages ->      prompt -> LLM ->
+ vectors in Qdrant    hybrid search -> rerank   numbered prompt         streamed, cited answer
+```
+
+### 1. Ingestion: turning a file into searchable pieces
+
+**Definition:** ingestion reads a document, cleans it, cuts it into small overlapping pieces (*chunks*) and stores each chunk as numbers (*embeddings*) that capture its meaning, so it can be found later. It runs in the background on a Celery worker, so the upload returns immediately.
+
+1. **Upload** (`POST /documents`): the API checks the file type and the 20 MB limit, computes a hash to detect a file you already uploaded, stores the bytes in Postgres, links the file to the current chat, and queues a task through Redis. Status: `pending`.
+2. **Load** (`ingestion/loaders/`): a loader picked by file type extracts the text and remembers where it came from: PDF pages (PyMuPDF), Word, PowerPoint slides, Excel and CSV rows, Markdown and HTML. Status: `processing`.
+3. **OCR** (`ingestion/ocr/`): a page with almost no text (fewer than 20 characters) is probably a scan. It is rendered at 300 DPI and read with Tesseract, and retried with different image settings if Tesseract's confidence is below 60%.
+4. **Clean** (`ingestion/cleaning/`): strips control characters, normalises Unicode and whitespace, rejoins words hyphenated across lines, removes headers and footers repeated on many pages, removes duplicate lines, and drops empty pages.
+5. **Chunk** (`ingestion/chunking/`): text is split into chunks of at most **512 tokens with a 64-token overlap**, so a sentence cut at a boundary still appears whole in one chunk. Slides stay whole up to 1,024 tokens, spreadsheets are grouped 20 rows at a time (never across two sheets), and HTML is split at its headings. Each chunk keeps its file name, page, slide or rows.
+6. **Embed** (`ingestion/embedding/`): each chunk gets two vectors. A **dense vector** (1,024 numbers from `bge-large-en-v1.5`) captures meaning, so "vacation" finds "annual leave". A **sparse BM25 vector** captures exact words, so a policy code or a number still matches.
+7. **Index**: both vectors and the chunk's metadata (owner, document id, location) are saved as one point in **Qdrant**. Status: `ready`, and the chip in the chat turns into a plain file chip.
+
+### 2. Retrieval: finding the passages that answer the question
+
+**Definition:** retrieval searches all chunks of the chat's documents and returns the few that most likely contain the answer. Good retrieval matters most in RAG: the model can't use a passage it never receives.
+
+0. **Shortcut**: greetings and introductions ("hi, myself Dishant") are recognised by rules and answered at once, without searching or calling the model. A chat with no documents gets a short "add a document first" reply.
+1. **Rewrite**: a follow-up like "and can I carry them over?" means nothing on its own. The LLM rewrites it into a standalone question using the chat history (and the chat summary): "Can unused leave days be carried over to next year?"
+2. **Hybrid search**: the question is embedded the same two ways. Qdrant runs the dense search and the BM25 search (15 results each) and fuses the two rankings with **reciprocal rank fusion (RRF)**, which rewards chunks that rank well in both lists. The search is filtered to **your user id and this chat's documents**, so nobody else's files can ever come back. The best 30 candidates move on.
+3. **Rerank**: a **cross-encoder** (`bge-reranker-base`) reads the question and each candidate *together* and scores how well the passage answers it. This is slower than vector search but much more precise, so it only runs on the 30 candidates and keeps the **top 5**.
+
+### 3. Augmentation: building the prompt
+
+**Definition:** augmentation adds the retrieved passages, and any useful context, to the question to form the prompt the model will read. It decides what the model is allowed to know for this answer.
+
+1. **Fit the budget** (`augmentation/context_builder.py`): the top passages are added in rank order until the **3,000-token** context budget is full; anything that doesn't fit is left out, and only the passages that really made it in are reported as used.
+2. **Number the sources**: each passage is labelled `[1]`, `[2]`... with its file name and location, and the code remembers which number belongs to which chunk.
+3. **Guard against injected instructions**: the prompt says the document text is untrusted data, not instructions, and the passages sit inside a separate context block, never in the user's message.
+4. **Add context**: the chat's rolling summary, the newest messages, and the facts in your long-term memory (as background only, capped at 500 tokens). Earlier refusals are left out, so one "I don't know" can't make every later answer refuse.
+5. **Rules**: answer only from the context, cite every claim with its number, and say plainly when the documents don't contain the answer. If no passage was found at all, the model isn't called; the standard "I couldn't find that" reply is returned instead.
+
+### 4. Generation: writing the answer
+
+**Definition:** generation sends the prompt to the language model and turns its output into the final, cited answer the user sees.
+
+1. **Call the model** (`generation/llm.py`): **Qwen3 8B** through Ollama runs locally and is the default. If it fails, LangChain's `with_fallbacks` switches to **Gemini**, if one is configured. No model available: a clear `503`; a used-up quota: `429`.
+2. **Stream** (`generation/orchestrator.py`): tokens are sent to the browser as **server-sent events** while they are generated, so the answer appears word by word, and the Stop button can cancel it.
+3. **Check the answer**: a refusal is recognised even when the model words it differently, and a blank answer becomes the standard refusal.
+4. **Map citations** (`augmentation/citation_mapper.py`): the `[n]` numbers in the answer are matched back to the real chunks. Only the sources the answer actually cites are returned, each with its file, page, slide or rows and a 600-character passage. The model can't cite a source it wasn't given.
+5. **Save and remember**: the question, the answer and its citations are saved in Postgres, and a final `done` event is sent. Afterwards, out of the user's way, long chats get their rolling summary updated and durable facts about you are merged into long-term memory.
 
 ## Engineering decisions
 
@@ -154,53 +191,99 @@ Known gaps, documented as strict `xfail` tests so a fix shows up immediately:
 
 ## Running it locally
 
-**You need:**
-- Python 3.13
-- Node 18+
-- Docker Desktop
-- `brew install tesseract libmagic` (on macOS)
-- [Ollama](https://ollama.com) with `ollama pull qwen3:8b`
-- A free [Clerk](https://clerk.com) application
+The backend runs entirely in Docker: one command starts Postgres, Qdrant, Redis, the database migrations, the API and the worker. The frontend runs with npm, and the LLM runs in Ollama on your machine.
 
-**1. Configure.** Copy the example files and fill them in. Each variable is explained in its file.
+**You need:**
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/), running
+- [Node.js](https://nodejs.org) 18 or newer
+- [Ollama](https://ollama.com), with the model downloaded: `ollama pull qwen3:8b`
+- A free [Clerk](https://clerk.com) application: in its dashboard, allow `http://localhost:5173`
+
+### 1. Configure
 
 ```bash
-cp backend/.env.example backend/.env      # database, Qdrant, Redis, Clerk JWKS/issuer, LLM provider
-cp frontend/.env.example frontend/.env    # VITE_API_URL and your Clerk publishable key (pk_...)
+git clone https://github.com/Dishant334/KnowledgeOS.git
+cd KnowledgeOS
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 ```
 
-In the Clerk dashboard, allow `http://localhost:5173`.
+- **`backend/.env`:** fill in `CLERK_JWKS_URL` and `CLERK_ISSUER` (Clerk dashboard → API keys). Set `OLLAMA_BASE_URL=http://host.docker.internal:11434` so the containers can reach Ollama on your machine. Database, Qdrant and Redis addresses are set by Docker Compose, so you don't need to change them. Every variable is explained in the file.
+- **`frontend/.env`:** set `VITE_CLERK_PUBLISHABLE_KEY` to your Clerk **publishable** key (`pk_...`, never the `sk_` secret). `VITE_API_URL` already points to `http://localhost:8000`.
 
-**2. Backend.** Postgres, Qdrant and Redis run in Docker; the API and worker run locally.
+### 2. Start the backend
 
 ```bash
-python3.13 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 cd backend
-docker compose up -d postgres qdrant redis       # Postgres on host port 5433
+docker compose up -d --build
+```
+
+The first build takes a few minutes. Compose starts these services:
+
+| Service | What it does | Port |
+|---|---|---|
+| `postgres` | users, documents, chats, messages, memory | 5433 |
+| `qdrant` | vector search | 6333 |
+| `redis` | task queue and rate limits | 6379 |
+| `migrate` | applies the database migrations, then exits | |
+| `api` | FastAPI backend | 8000 |
+| `worker` | Celery worker that reads uploaded documents | |
+
+Check that everything is up:
+
+```bash
+docker compose ps                    # api and worker should show "healthy" after about a minute
+curl http://localhost:8000/health    # {"status":"ok"}
+```
+
+### 3. Start the frontend
+
+```bash
+cd ../frontend
+npm install
+npm run dev
+```
+
+Open **http://localhost:5173**, create an account, add a document with the paperclip and ask a question. The first question after a start downloads and loads about 3 GB of search models, so it takes a minute; they are cached in a Docker volume after that.
+
+### Everyday commands
+
+Run these in `backend/`:
+
+| Command | What it does |
+|---|---|
+| `docker compose logs -f api worker` | follow the API and worker logs |
+| `docker compose up -d --build` | rebuild and restart after changing backend code |
+| `docker compose stop` | stop everything; data is kept |
+| `docker compose down` | stop and remove the containers; data is kept |
+| `docker compose down -v` | remove everything **including all data** (documents, chats, memory) |
+
+<details>
+<summary><b>Developing the backend without containers</b> (hot reload and tests)</summary>
+
+Keep only the databases in Docker and run the API and worker from a Python 3.13 virtual environment. On macOS you also need `brew install tesseract libmagic`.
+
+```bash
+python3.13 -m venv .venv
+.venv/bin/pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+cd backend
+docker compose up -d postgres qdrant redis
 ../.venv/bin/alembic upgrade head
 ../.venv/bin/uvicorn app.main:app --reload                              # API on :8000
-../.venv/bin/celery -A app.worker.celery_app worker --loglevel=info     # in a second terminal
+../.venv/bin/celery -A app.worker.celery_app worker --loglevel=info     # second terminal
 ```
 
-The first question after a start loads about 3 GB of models, which takes around 30 s.
+In this mode, use the local addresses in `backend/.env` (Postgres on `localhost:5433`, and `OLLAMA_BASE_URL=http://localhost:11434`).
 
-To run everything in containers instead, use `docker compose up -d` in `backend/`. A one-shot `migrate` service applies the migrations before the API and worker start. Inside containers, set `OLLAMA_BASE_URL=http://host.docker.internal:11434`.
-
-**3. Frontend**
+Tests and evaluation:
 
 ```bash
-cd frontend
-npm install
-npm run dev        # http://localhost:5173
-```
-
-**4. Tests and evaluation**
-
-```bash
-cd backend && ../.venv/bin/python -m pytest -q    # uses an isolated <db>_test database, Redis DB 15, its own Qdrant collection
+cd backend && ../.venv/bin/python -m pytest -q    # isolated <db>_test database, Redis DB 15, its own Qdrant collection
 cd frontend && npm test                           # Vitest
 cd backend && ../.venv/bin/python -m eval.run     # full evaluation (about an hour with local models), see backend/eval/README.md
 ```
+
+</details>
 
 ## Project structure
 
@@ -226,19 +309,3 @@ frontend/
     auth/ theme/ components/ layout/ pages/ lib/
 docs/               architecture diagram and screenshots
 ```
-
-## Limitations and roadmap
-
-**Limitations:**
-- 20 MB per file.
-- Embedding runs on the CPU: a 40-page PDF takes about a minute, and a 1,000-page one about 20 minutes.
-- An answer takes about 7–12 s on a laptop with local Qwen.
-- The Gemini free tier allows only a few requests per day.
-- There's no view of the full document yet; citations show a 600-character passage.
-
-**Next:**
-- CI with GitHub Actions
-- A public deployment (Cloudflare Tunnel or a free VM)
-- A demo video
-- Playwright end-to-end tests
-- Closing the three known security gaps
