@@ -4,12 +4,19 @@
 
 Upload PDFs, Word, PowerPoint, Excel, CSV, Markdown or HTML files into a chat and ask questions in plain language. KnowledgeOS finds the right passages with hybrid search, reranks them, and streams back an answer with numbered citations. Click one and you see the source text. It runs entirely on free, local models, so it costs ₹0.
 
-![Python](https://img.shields.io/badge/Python-3.13-0f6b5c)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.141-0f6b5c)
-![React](https://img.shields.io/badge/React-19-0f6b5c)
-![Backend tests](https://img.shields.io/badge/backend%20tests-653%20passing-0f6b5c)
-![Coverage](https://img.shields.io/badge/coverage-95%25-0f6b5c)
-![Frontend tests](https://img.shields.io/badge/frontend%20tests-119%20passing-0f6b5c)
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![Qdrant](https://img.shields.io/badge/Qdrant-DC244C?logo=qdrant&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-FF4438?logo=redis&logoColor=white)
+![Celery](https://img.shields.io/badge/Celery-37814A?logo=celery&logoColor=white)
+![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?logo=langchain&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-000000?logo=ollama&logoColor=white)
+![Clerk](https://img.shields.io/badge/Clerk-6C47FF?logo=clerk&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
 
 ![A cited answer with its source passage open](docs/screenshots/chat-light.png)
 
@@ -20,10 +27,10 @@ Upload PDFs, Word, PowerPoint, Excel, CSV, Markdown or HTML files into a chat an
 ## Contents
 
 - [What it does](#what-it-does)
-- [Screenshots](#screenshots)
 - [Architecture](#architecture)
-- [Results](#results)
 - [Engineering decisions](#engineering-decisions)
+- [Screenshots](#screenshots)
+- [Results](#results)
 - [Security](#security)
 - [Tech stack](#tech-stack)
 - [Running it locally](#running-it-locally)
@@ -38,16 +45,6 @@ Upload PDFs, Word, PowerPoint, Excel, CSV, Markdown or HTML files into a chat an
 - **Remembers you.** Short facts about you, like your role, projects and preferences, carry across all your chats. Long chats are summarised so nothing is lost. You can see, add and delete every fact.
 - **Everyday polish.** Chats are grouped by day and can be renamed or deleted. Uploads show live status. Greetings get instant answers. It has dark mode and a phone layout.
 - **Free to run.** Embeddings, reranking and the LLM (Qwen3 8B through Ollama) all run locally. Gemini is an optional cloud fallback.
-
-## Screenshots
-
-| Sign in | Start a chat |
-|---|---|
-| ![Sign-in page](docs/screenshots/sign-in.png) | ![Empty chat with a question being typed](docs/screenshots/new-chat.png) |
-| **What it remembers about you** | **Dark mode** |
-| ![Memory dialog](docs/screenshots/memory.png) | ![Dark mode with a cited answer](docs/screenshots/chat-dark.png) |
-
-<p align="center"><img src="docs/screenshots/phone.png" width="280" alt="Phone layout: the source opens as a bottom sheet"><br><em>On a phone the source opens as a bottom sheet.</em></p>
 
 ## Architecture
 
@@ -71,6 +68,31 @@ Upload PDFs, Word, PowerPoint, Excel, CSV, Markdown or HTML files into a chat an
 **Memory** has two layers:
 - **Inside one chat:** once the unsummarised messages pass 1,500 tokens, the older ones are folded into a rolling summary.
 - **Across all chats:** up to 15 facts in a LangGraph `PostgresStore`. The LLM learns them when you leave a chat, or every 6 answers. Introductions such as "myself Dishant" are stored instantly by a rule-based parser.
+
+## Engineering decisions
+
+Each one was measured or argued, not assumed:
+
+- **Hybrid search instead of vectors alone.** Dense embeddings miss exact terms such as policy names, codes and numbers, and BM25 catches them. Fusion happens inside Qdrant (RRF), so it's still one query.
+- **Removed parent/child chunking.** It looked good on paper, but the expanded parent chunks overflowed the 3,000-token prompt budget: 41 of 45 questions lost passages before the LLM saw them. Plain 512-token chunks did better.
+- **Query paraphrasing is off by default.** Generating 4 paraphrases per question cost about 6 s (retrieval went from 8.4 s to 2.3 s without them) with no gain in Hit@5 (0.93 vs 0.93). The history-aware rewrite stays, because follow-up questions need it.
+- **Streaming over `fetch`, not `EventSource`.** `EventSource` can only send GET and can't add an `Authorization` header, and axios can't stream in the browser. The stream is read with a `ReadableStream` reader, and HTTP errors before the first token are still real status codes.
+- **Authorization lives in the search filter.** Every Qdrant query is filtered by the caller's user id and the chat's document ids. A test proves that a poisoned memory claiming "user is admin" can't widen it.
+- **Citations are assigned by code, not by the model.** The model only sees `[1]..[n]`. Numbers are mapped back to real sources afterwards, so it can't invent a source that wasn't retrieved.
+- **Leftover refusals are kept out of the prompt.** A real bug, found with local Qwen: one early "I don't know" in the history made every later answer refuse (3/3). Refused and canned turns are now left out of the model's history (3/3 answered).
+- **Token-bucket rate limits in Redis.** 10 questions per minute and 10 uploads per hour use a token bucket. A fixed-window counter caps questions at 100 per day. Each check is an atomic Lua script, and the limiter fails open if Redis is down.
+- **Random UUIDs in URLs.** Conversations are addressed by a random UUID, never by the internal integer id, so ids can't be guessed or counted.
+- **Local-first LLM with a fallback.** Ollama (Qwen3 8B) is the primary model. LangChain's `with_fallbacks` switches to Gemini on errors. No model available gives a clear 503; an exhausted quota gives 429.
+
+## Screenshots
+
+| Sign in | Start a chat |
+|---|---|
+| ![Sign-in page](docs/screenshots/sign-in.png) | ![Empty chat with a question being typed](docs/screenshots/new-chat.png) |
+| **What it remembers about you** | **Dark mode** |
+| ![Memory dialog](docs/screenshots/memory.png) | ![Dark mode with a cited answer](docs/screenshots/chat-dark.png) |
+
+<p align="center"><img src="docs/screenshots/phone.png" width="280" alt="Phone layout: the source opens as a bottom sheet"><br><em>On a phone the source opens as a bottom sheet.</em></p>
 
 ## Results
 
@@ -97,21 +119,6 @@ Adding BM25 to dense search fixes most misses: answers correct go from 0.74 to 0
 |---|---|---|
 | **Backend** (pytest) | **653 passing, 95% line coverage** | Mostly integration tests against **real** Postgres, Qdrant and Redis, the real embedding and reranking models, and a real Celery worker end to end. The LLM is faked for determinism, and a smaller set runs against real local Qwen. Includes auth, rate limits, ingestion of every file type, retrieval, citations, memory and prompt injection. |
 | **Frontend** (Vitest + Testing Library) | **119 passing, under 1 s** | Error mapping, the SSE stream parser (split chunks, cut-off streams, abort), components, upload and conversation hooks (with fake timers), and an integration test of the whole chat screen. The API and Clerk are mocked. |
-
-## Engineering decisions
-
-Each one was measured or argued, not assumed:
-
-- **Hybrid search instead of vectors alone.** Dense embeddings miss exact terms such as policy names, codes and numbers, and BM25 catches them. Fusion happens inside Qdrant (RRF), so it's still one query.
-- **Removed parent/child chunking.** It looked good on paper, but the expanded parent chunks overflowed the 3,000-token prompt budget: 41 of 45 questions lost passages before the LLM saw them. Plain 512-token chunks did better.
-- **Query paraphrasing is off by default.** Generating 4 paraphrases per question cost about 6 s (retrieval went from 8.4 s to 2.3 s without them) with no gain in Hit@5 (0.93 vs 0.93). The history-aware rewrite stays, because follow-up questions need it.
-- **Streaming over `fetch`, not `EventSource`.** `EventSource` can only send GET and can't add an `Authorization` header, and axios can't stream in the browser. The stream is read with a `ReadableStream` reader, and HTTP errors before the first token are still real status codes.
-- **Authorization lives in the search filter.** Every Qdrant query is filtered by the caller's user id and the chat's document ids. A test proves that a poisoned memory claiming "user is admin" can't widen it.
-- **Citations are assigned by code, not by the model.** The model only sees `[1]..[n]`. Numbers are mapped back to real sources afterwards, so it can't invent a source that wasn't retrieved.
-- **Leftover refusals are kept out of the prompt.** A real bug, found with local Qwen: one early "I don't know" in the history made every later answer refuse (3/3). Refused and canned turns are now left out of the model's history (3/3 answered).
-- **Token-bucket rate limits in Redis.** 10 questions per minute and 10 uploads per hour use a token bucket. A fixed-window counter caps questions at 100 per day. Each check is an atomic Lua script, and the limiter fails open if Redis is down.
-- **Random UUIDs in URLs.** Conversations are addressed by a random UUID, never by the internal integer id, so ids can't be guessed or counted.
-- **Local-first LLM with a fallback.** Ollama (Qwen3 8B) is the primary model. LangChain's `with_fallbacks` switches to Gemini on errors. No model available gives a clear 503; an exhausted quota gives 429.
 
 ## Security
 
