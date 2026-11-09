@@ -9,7 +9,7 @@ import pytest
 
 from app.db.models import Message
 from app.memory import store
-from app.services.introductions import GREETING_REPLY, analyze_message, extract_self_facts, social_reply
+from app.services.introductions import GREETING_REPLY, analyze_message, social_reply
 from tests.conftest import conversation_pk, make_fake_llm
 from tests.test_retrieve_ask_api import chat, headers_for, use_llm, users  # noqa: F401  (shared fixtures)
 
@@ -32,9 +32,9 @@ from tests.test_retrieve_ask_api import chat, headers_for, use_llm, users  # noq
     ("I'm Dishant and I work at Infosys", ["Name: Dishant", "Works at: Infosys"]),
 ])
 def test_self_facts_are_recognised(message, expected):
-    facts, only_introduction = extract_self_facts(message)
-    assert [f.text for f in facts] == expected
-    assert only_introduction is True
+    analysis = analyze_message(message)
+    assert [f.text for f in analysis.facts] == expected
+    assert analysis.only_social is True
 
 
 @pytest.mark.parametrize("message", [
@@ -43,13 +43,13 @@ def test_self_facts_are_recognised(message, expected):
     "how many vacation days do I get?", "I'm sorry",
 ])
 def test_look_alikes_are_not_facts(message):
-    facts, only_social = extract_self_facts(message)
-    assert facts == [] and only_social is False
+    analysis = analyze_message(message)
+    assert analysis.facts == [] and analysis.only_social is False
 
 
 def test_an_introduction_with_a_question_is_not_only_an_introduction():
-    facts, only_introduction = extract_self_facts("I'm Dishant, how many vacation days do I get?")
-    assert [f.text for f in facts] == ["Name: Dishant"] and only_introduction is False
+    analysis = analyze_message("I'm Dishant, how many vacation days do I get?")
+    assert [f.text for f in analysis.facts] == ["Name: Dishant"] and analysis.only_social is False
 
 
 def test_the_reply_greets_by_name_even_when_memory_is_full():

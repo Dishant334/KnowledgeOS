@@ -5,19 +5,22 @@ import '@fontsource-variable/fraunces' // the serif used for headings and the wo
 import './index.css'
 import App from './App.jsx'
 import ClerkWithRouter from './auth/ClerkWithRouter.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { CLERK_PUBLISHABLE_KEY } from './lib/constants'
 import MissingConfigPage from './pages/MissingConfigPage.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {CLERK_PUBLISHABLE_KEY ? (
-      <BrowserRouter>
-        <ClerkWithRouter>
-          <App />
-        </ClerkWithRouter>
-      </BrowserRouter>
-    ) : (
-      <MissingConfigPage />
-    )}
+    <ErrorBoundary>
+      {CLERK_PUBLISHABLE_KEY ? (
+        <BrowserRouter>
+          <ClerkWithRouter>
+            <App />
+          </ClerkWithRouter>
+        </BrowserRouter>
+      ) : (
+        <MissingConfigPage />
+      )}
+    </ErrorBoundary>
   </StrictMode>,
 )

@@ -124,20 +124,6 @@ def ingest_file(
         )
 
 
-def ingest_files(files: list[tuple[bytes, str, str]], metadata: dict | None = None) -> list[IngestionResult]:
-    """
-    files is a list of (data, filename, mime_type)
-    just loops and calls ingest_file one by one
-    """
-    results = []
-
-    for data, filename, mime_type in files:
-        result = ingest_file(data, filename, mime_type, metadata)
-        results.append(result)
-
-    return results
-
-
 def run_ocr_on_pages(documents: list[Document], pdf_data: bytes):
     """
     goes through every page and checks if ocr is needed

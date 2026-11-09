@@ -411,7 +411,11 @@ def test_without_documents_other_small_talk_gets_a_matching_reply(client, users,
 
 
 def test_small_talk_detection():
-    from app.services.small_talk import is_small_talk
+    from app.services.introductions import analyze_message
+
+    def is_small_talk(text):
+        analysis = analyze_message(text)
+        return analysis.only_social and not analysis.facts
 
     for text in ["hi", "HI!!", "hii", "hello there", "Hey", "good evening", "thank you so much", "how are you?", "ok", "help"]:
         assert is_small_talk(text), text

@@ -150,12 +150,6 @@ def analyze_message(message: str) -> Analysis:
     return Analysis(facts, social, bool(facts or social) and not other)
 
 
-def extract_self_facts(message: str) -> tuple[list[SelfFact], bool]:
-    """(facts, only_social): kept for callers that only need the facts."""
-    analysis = analyze_message(message)
-    return analysis.facts, analysis.only_social
-
-
 ABOUT_ME = (
     "I'm KnowledgeOS, your document assistant: I answer questions from the documents you add to a chat, "
     "and every answer points to the passage it came from."
