@@ -19,13 +19,18 @@ export default function HomePage() {
       {/* the same dark-mode lamp as on every other page; z-[60] keeps it (and its cord) above the fixed header (z-50) */}
       <ThemeLamp className="fixed right-6 top-0 z-[60] md:right-12" />
       <Header />
-      <main id="main">
-        <Hero />
-        <Features />
-        <HowItWorks />
-        <Proof />
-        <Demo/>
-        <Faq />
+      {/* <main> sits above the footer (z-10); the footer is pinned underneath it and is uncovered when the call-to-action
+          scrolls away. Every section before the CTA gets the page colour, so the footer never shows through them; the CTA
+          paints its own background and its rounded bottom corners let the footer show around them. */}
+      <main id="main" className="relative z-10">
+        <div className="bg-surface">
+          <Hero />
+          <Features />
+          <HowItWorks />
+          <Proof />
+          <Demo/>
+          <Faq />
+        </div>
         <Cta />
       </main>
       <Footer />
