@@ -23,8 +23,8 @@ export default function HomePage() {
         <Hero />
         <Features />
         <HowItWorks />
-        <Demo />
         <Proof />
+        <Demo/>
         <Faq />
         <Cta />
       </main>
