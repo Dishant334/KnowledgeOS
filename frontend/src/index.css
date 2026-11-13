@@ -41,6 +41,19 @@ body {
   @apply bg-paper text-ink antialiased;
 }
 
+/* The home page paints the WHOLE screen white (dark in dark mode), not just its own box: the page behind the app is
+   cream (paper), which would otherwise show at the edges and when you over-scroll. The page marks itself with the
+   `home-page` class; :has() lets html and body follow it, and they go back to paper by themselves on other pages.
+   #ffffff and #1c1c1c are the light and dark values of --color-surface (the dark ones only exist inside the theme wrapper). */
+html:has(.home-page),
+html:has(.home-page) body {
+  background-color: #ffffff;
+}
+html:has(.dark .home-page),
+html:has(.dark .home-page) body {
+  background-color: #1c1c1c;
+}
+
 /* "graph paper": the paper colour with a fine dotted grid, made of CSS only (no image) */
 .bg-graph-paper {
   background-color: var(--color-paper);
@@ -358,4 +371,10 @@ body {
   @keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
   .dialog-in { animation: dialog-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both; }
   .page-in { animation: page-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  /* the open feature cards: a slow, endless float, always the same height (20 px) for every card. Features.jsx
+     gives each card its own start delay so they float one after another, left to right, with a gap (a wave).
+     It moves the CSS `translate` property, so it never clashes with the scroll animation, which writes `transform`.
+     Features.jsx sets data-open="true" only once a card has landed and turned face up. 4.2s = FLOAT_MS there. */
+  @keyframes card-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -20px; } }
+  .card-float[data-open='true'] { animation: card-float 4.2s ease-in-out infinite; }
 }

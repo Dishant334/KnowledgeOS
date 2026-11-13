@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import useParallax from '../hooks/useParallax'
 import { ripple } from '../lib/ripple'
 import AuthArtwork from './AuthArtwork'
@@ -124,9 +124,19 @@ export default function AuthLayout() {
           {/* the form half: column 1 for sign-in, column 2 for sign-up. key={routeMode} remounts it so it animates in. */}
           <div
             key={routeMode}
-            className={`auth-form-in z-0 flex min-w-0 items-center justify-center px-6 py-10 sm:px-12 ${signingUpRoute ? 'md:col-start-2' : 'md:col-start-1'} md:row-start-1`}
+            className={`auth-form-in relative z-0 flex min-w-0 items-center justify-center px-6 pb-10 pt-16 sm:px-12 md:pb-6 md:pt-14 ${signingUpRoute ? 'md:col-start-2' : 'md:col-start-1'} md:row-start-1`}
             style={{ '--auth-from': signingUpRoute ? '-28px' : '28px' }}
           >
+            {/* the way back to the public home page (top-left of the form half) */}
+            <Link
+              to="/"
+              className="group absolute left-5 top-3 inline-flex items-center gap-1.5 rounded-xl bg-surface px-3 py-1.5 text-sm font-medium text-stone-700 ring-1 ring-stone-300 hover:bg-stone-50 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 sm:left-8 sm:top-4"
+            >
+              <svg viewBox="0 0 16 16" className="size-4 motion-safe:transition-transform motion-safe:duration-200 motion-safe:group-hover:-translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M13 8H3M7 4L3 8l4 4" />
+              </svg>
+              Back to home
+            </Link>
             <div className="w-full max-w-sm">
               <Outlet />
             </div>

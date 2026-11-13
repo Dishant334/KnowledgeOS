@@ -44,7 +44,7 @@ export default function ClerkWithRouter({ children }) {
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/chat"
       signUpFallbackRedirectUrl="/chat"
-      afterSignOutUrl="/sign-in"
+      afterSignOutUrl="/"
     >
       {children}
     </ClerkProvider>

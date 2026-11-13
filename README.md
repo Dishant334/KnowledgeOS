@@ -20,7 +20,7 @@ Upload PDFs, Word, PowerPoint, Excel, CSV, Markdown or HTML files into a chat an
 
 ![A cited answer with its source passage open](docs/screenshots/chat-light.png)
 
-<!-- Demo GIF: record a 20-30 s clip (upload -> ask -> click a citation) and put it here as docs/demo.gif -->
+<!-- Demo video: add the YouTube link here, as a clickable thumbnail -->
 
 ---
 
