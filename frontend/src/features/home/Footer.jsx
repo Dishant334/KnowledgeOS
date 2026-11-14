@@ -17,7 +17,8 @@ import { Link } from 'react-router-dom'
 // On a phone its columns stack and it is taller than the screen, so it is an ordinary footer you scroll through (pinning it
 // would hide its top).
 //
-// `snap-end` makes it the second scroll stop after the CTA (see Cta.jsx): one scroll from the CTA opens it fully.
+// The second scroll stop after the CTA is NOT the footer itself: a pinned (sticky) element is always at the screen's edge,
+// so as a snap point it caught every small scroll. HomePage puts a 1 px marker at the very end of the page instead.
 
 const GITHUB_URL = 'https://github.com/Dishant334/KnowledgeOS'
 
@@ -90,7 +91,7 @@ export default function Footer() {
   const toTop = () => window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' })
 
   return (
-    <footer ref={ref} className="relative z-0 flex snap-end flex-col overflow-hidden bg-paper text-ink md:sticky md:bottom-0 md:min-h-[100svh]">
+    <footer ref={ref} className="relative z-0 flex flex-col overflow-hidden bg-paper text-ink md:sticky md:bottom-0 md:min-h-[100svh]">
       <motion.div
         style={reduced ? undefined : { y: rise, opacity: fade }}
         className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col px-5 pb-6 pt-24 sm:px-10 sm:pt-28 lg:px-16"

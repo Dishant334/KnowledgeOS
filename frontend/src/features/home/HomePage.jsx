@@ -34,6 +34,8 @@ export default function HomePage() {
         <Cta />
       </main>
       <Footer />
+      {/* the end of the page as a scroll stop (one scroll from the call-to-action opens the footer fully) */}
+      <div aria-hidden="true" className="h-px snap-end" />
     </div>
   )
 }
