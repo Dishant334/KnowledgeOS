@@ -13,6 +13,7 @@ from app.ingestion.cleaning.orchestrator import CleaningOrchestrator
 from app.ingestion.chunking.orchestrator import ChunkingOrchestrator
 from app.ingestion.embedding.orchestrator import EmbeddingOrchestrator
 from app.ingestion.model import IngestionResult
+from app.ingestion.loaders.code_loader import CODE_MIME_TYPE  # CODEBASE-FEATURE
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,13 @@ def ingest_file(
             warnings.extend(ocr_warnings)
 
         # step 3: clean the documents
-        cleaned_documents = cleaning_orchestrator.process_batch(documents)
+        # CODEBASE-FEATURE: code is NEVER cleaned. The cleaner drops repeated lines (`return None`, `}`),
+        # flattens whitespace and flags low-alphanumeric text, which would corrupt source code.
+        # The loader already refused empty files, so only the cleaner is skipped.
+        if mime_type == CODE_MIME_TYPE:
+            cleaned_documents = documents
+        else:
+            cleaned_documents = cleaning_orchestrator.process_batch(documents)
 
         if not cleaned_documents:
             return IngestionResult(

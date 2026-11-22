@@ -10,6 +10,8 @@ from app.db.models.user import User
 from app.core.postgres_storage import PostgresStorage
 from app.ingestion.hashing import compute_document_hash
 from app.ingestion.loaders.factory import SUPPORTED_MIME_TYPES
+from app.ingestion.loaders.code_loader import CODE_MIME_TYPE  # CODEBASE-FEATURE
+from app.ingestion.codebase.policy import classify as classify_codebase_file, language_for  # CODEBASE-FEATURE
 from app.db.models.documents_blob import DocumentBlob
 from app.worker.celery_app import celery_app
 from app.ingestion.embedding.vector_store import delete_document_points
@@ -45,7 +47,20 @@ _EXTENSION_MIME_TYPES = {
 _GENERIC_MIME_TYPES = {None, "", "application/octet-stream"}
 
 
+# CODEBASE-FEATURE: why a code upload is refused (the policy's skip reason -> a message a user can act on).
+_CODE_REFUSALS = {
+    "secret_file": "This file name looks like it holds secrets (keys, credentials, .env), so it was not accepted.",
+    "ignored_file": "Minified, generated and lock files are not accepted. Upload the original source file.",
+    "ignored_dir": "Files from build or dependency folders are not accepted.",
+    "unsafe_path": "The file name is not valid.",
+}
+
+
 def resolve_mime_type(content_type: str | None, filename: str) -> str | None:
+    # CODEBASE-FEATURE: for source code the EXTENSION decides, whatever the client sent
+    # (browsers label .ts as video/mp2t and .py as octet-stream or text/plain).
+    if language_for(filename):
+        return CODE_MIME_TYPE
     content_type = (content_type or "").split(";")[0].strip().lower() or None
     if content_type in _GENERIC_MIME_TYPES:
         suffix = filename[filename.rfind("."):].lower() if "." in filename else ""
@@ -102,6 +117,13 @@ async def _save_document(db: Session, user: User, file: UploadFile) -> tuple[Doc
             status_code=400,
             detail="Unsupported file type",
         )
+
+    # CODEBASE-FEATURE: code files get the policy's name checks (secrets, minified/generated) before we
+    # even read the bytes. Scoped to code on purpose: a docs upload named credentials.txt stays allowed.
+    if mime_type == CODE_MIME_TYPE:
+        verdict = classify_codebase_file(file.filename)
+        if not verdict.accepted:
+            raise HTTPException(status_code=400, detail=_CODE_REFUSALS.get(verdict.skip_reason, "This file was not accepted."))
 
     # Read file
     content = await file.read()

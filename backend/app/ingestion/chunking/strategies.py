@@ -7,6 +7,7 @@ from langchain_core.documents import Document
 from langchain_text_splitters import (
     RecursiveCharacterTextSplitter,
     HTMLHeaderTextSplitter,
+    Language,  # CODEBASE-FEATURE
 )
 
 from app.ingestion.chunking.base import ChunkingStrategy
@@ -183,3 +184,56 @@ class HTMLSpecificStrategy(ChunkingStrategy):
         # Enforce chunk_size — a section between two headers can still
         # be arbitrarily long.
         return self._size_splitter.split_documents(header_split_docs)
+
+# CODEBASE-FEATURE (Stage 2) -------------------------------------------------------
+# Our language names (policy.py) -> LangChain's Language enum.
+_CODE_LANGUAGES = {
+    "python": Language.PYTHON,
+    "javascript": Language.JS,
+    "typescript": Language.TS,
+    "java": Language.JAVA,
+    "c": Language.C,
+    "cpp": Language.CPP,
+}
+
+
+class CodeChunkingStrategy(ChunkingStrategy):
+    """
+    First, simple strategy for SOURCE CODE (one Document per file).
+
+    Token-aware like the prose splitter, but it tries to cut at the language's
+    own boundaries first (class / function / method keywords), then blank lines,
+    then lines. Two settings matter for code:
+      - strip_whitespace=False: the default strips each chunk, which would delete
+        the indentation of a chunk's first line and change what Python code means.
+      - the splitter for a language is built once and reused.
+
+    Known weakness (measured in Stage 5, fixed by tree-sitter in Stage 6): the
+    separators are keyword-and-whitespace patterns, not a parse tree, so e.g. a
+    method indented with 4 spaces is not recognised as a boundary. Chunks may
+    start mid-class. They are still never reformatted.
+    """
+
+    def __init__(self, config: ChunkingConfig):
+        self.config = config
+        self._splitters: dict[str, RecursiveCharacterTextSplitter] = {}
+
+    def _splitter_for(self, language: str) -> RecursiveCharacterTextSplitter:
+        if language not in self._splitters:
+            separators = RecursiveCharacterTextSplitter.get_separators_for_language(_CODE_LANGUAGES[language])
+            self._splitters[language] = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+                encoding_name=self.config.encoding_name,
+                chunk_size=self.config.chunk_size,
+                chunk_overlap=self.config.chunk_overlap,
+                separators=separators,
+                strip_whitespace=False,
+            )
+        return self._splitters[language]
+
+    def split(self, document: Document) -> list[Document]:
+        if not document.page_content or not document.page_content.strip():
+            return []
+        language = document.metadata.get("language")
+        if language not in _CODE_LANGUAGES:
+            raise ValueError(f"CodeChunkingStrategy needs a known 'language' in metadata, got {language!r}")
+        return self._splitter_for(language).split_documents([document])

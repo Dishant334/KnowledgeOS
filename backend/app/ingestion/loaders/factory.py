@@ -8,6 +8,7 @@ from app.ingestion.loaders.html import HTMLLoader
 from app.ingestion.loaders.xlsx import XLSXLoader
 from app.ingestion.loaders.pptx import PPTXLoader
 from app.ingestion.loaders.text import TextLoader
+from app.ingestion.loaders.code_loader import CODE_MIME_TYPE, CodeLoader  # CODEBASE-FEATURE
 
 
 SUPPORTED_MIME_TYPES = frozenset({
@@ -19,6 +20,7 @@ SUPPORTED_MIME_TYPES = frozenset({
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "text/plain",
     "text/markdown",
+    CODE_MIME_TYPE,  # CODEBASE-FEATURE
 })
 
 
@@ -47,6 +49,9 @@ def get_loader(mime_type: str) -> BaseLoader:
 
     elif mime_type == "text/markdown":
         return TextLoader(file_type="md")
+
+    elif mime_type == CODE_MIME_TYPE:  # CODEBASE-FEATURE
+        return CodeLoader()
 
     else:
         raise ValueError(

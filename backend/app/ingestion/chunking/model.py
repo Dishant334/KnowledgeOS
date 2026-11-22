@@ -11,6 +11,7 @@ class DocumentType(StrEnum):
     SLIDES = "slides"
     TABULAR = "tabular"
     HTML = "html"
+    CODE = "code"  # CODEBASE-FEATURE
 
 
 @dataclass(frozen=True)

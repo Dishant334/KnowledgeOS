@@ -10,6 +10,8 @@ FAILURE_REASONS = (
     ("loader returned nothing", "The file appears to be empty or could not be read."),
     ("nothing left after cleaning", "No readable text was found in the file."),
     ("chunking gave no output", "No readable text was found in the file."),
+    ("Source file is not valid UTF-8", "This file is not valid UTF-8 text, so it could not be read as code."),  # CODEBASE-FEATURE
+    ("Code file is empty", "The file is empty."),  # CODEBASE-FEATURE
     ("Failed after", "A temporary problem stopped processing this file. Please try uploading it again."),
     ("Failed to queue ingestion", "Processing could not be started. Please try uploading the file again."),
 )

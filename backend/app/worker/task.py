@@ -42,6 +42,7 @@ _DOC_TYPES = {
     "text/html": "html",
     "text/plain": "txt",
     "text/markdown": "md",
+    "text/x-code": "code",  # CODEBASE-FEATURE
 }
 
 
