@@ -1,6 +1,9 @@
 // What the backend can read (backend/app/services/document.py) and how files are shown.
 
-export const ACCEPTED_EXTENSIONS = ['.pdf', '.docx', '.pptx', '.xlsx', '.csv', '.txt', '.md', '.markdown', '.html', '.htm']
+// CODEBASE-FEATURE (Stage 3): source files the backend reads as code (policy.py TIER1_CODE). Stage 4 will make the
+// allowed types depend on the chat's mode; the backend decides by extension and applies its own checks too.
+export const CODE_EXTENSIONS = ['.py', '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.java', '.c', '.h', '.cpp', '.hpp', '.cc', '.cxx']
+export const ACCEPTED_EXTENSIONS = ['.pdf', '.docx', '.pptx', '.xlsx', '.csv', '.txt', '.md', '.markdown', '.html', '.htm', ...CODE_EXTENSIONS]
 export const ACCEPT_ATTRIBUTE = ACCEPTED_EXTENSIONS.join(',')
 export const MAX_FILE_BYTES = 20 * 1024 * 1024 // the backend refuses anything larger (413)
 
@@ -12,7 +15,7 @@ export function extensionOf(name = '') {
 // A reason to refuse the file before uploading it, or null if it looks fine. (The backend checks again.)
 export function validateFile(file) {
   if (!ACCEPTED_EXTENSIONS.includes(extensionOf(file.name))) {
-    return 'This file type is not supported. Use PDF, Word, PowerPoint, Excel, CSV, text, Markdown or HTML.'
+    return 'This file type is not supported. Use PDF, Word, PowerPoint, Excel, CSV, text, Markdown, HTML or a source code file (.py, .js, .ts, .java, .c, .cpp).'
   }
   if (file.size > MAX_FILE_BYTES) return 'This file is larger than 20 MB.'
   if (file.size === 0) return 'This file is empty.'

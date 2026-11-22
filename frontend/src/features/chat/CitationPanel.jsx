@@ -9,6 +9,8 @@ export default function CitationPanel({ citation, others, onClose, onSwitch }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const subtitle = (citation.isCode ? [citation.language, citation.location] : [citation.location]).filter(Boolean).join(' · ')
+
   return (
     <aside
       aria-label={`Source ${citation.n}`}
@@ -18,7 +20,8 @@ export default function CitationPanel({ citation, others, onClose, onSwitch }) {
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-stone-600">Source {citation.n}</p>
           <h2 className="mt-1 truncate font-display text-lg font-semibold text-ink">{citation.filename}</h2>
-          {citation.location && <p className="text-sm text-stone-600">{citation.location}</p>}
+          {/* CODEBASE-FEATURE: code shows the language next to the lines, e.g. "python · Lines 40-72" */}
+          {subtitle && <p className="text-sm text-stone-600">{subtitle}</p>}
         </div>
         <button
           type="button"
@@ -33,10 +36,20 @@ export default function CitationPanel({ citation, others, onClose, onSwitch }) {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600">Passage</p>
-        <blockquote className="whitespace-pre-wrap rounded-r-lg border-l-4 border-highlight bg-highlight/15 p-3 text-sm leading-6 text-ink">
-          {citation.snippet || 'The passage is not available for this answer.'}
-        </blockquote>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600">{citation.isCode ? 'Code' : 'Passage'}</p>
+        {citation.isCode ? (
+          // CODEBASE-FEATURE: monospace, indentation kept, long lines scroll sideways. Plain text only (S15).
+          <pre
+            tabIndex={0}
+            className="overflow-x-auto rounded-r-lg border-l-4 border-highlight bg-highlight/15 p-3 font-mono text-xs leading-5 text-ink focus-visible:outline-2 focus-visible:outline-brand-700"
+          >
+            <code>{citation.snippet || 'The code is not available for this answer.'}</code>
+          </pre>
+        ) : (
+          <blockquote className="whitespace-pre-wrap rounded-r-lg border-l-4 border-highlight bg-highlight/15 p-3 text-sm leading-6 text-ink">
+            {citation.snippet || 'The passage is not available for this answer.'}
+          </blockquote>
+        )}
       </div>
 
       {others.length > 0 && (

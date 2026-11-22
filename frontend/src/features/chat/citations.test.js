@@ -33,6 +33,44 @@ describe('toCitation', () => {
 
   it('falls back when name, location and snippet are missing', () => {
     const c = toCitation({ marker: '[2]', document_id: 1, source_name: null, snippet: null })
-    expect(c).toEqual({ n: 2, documentId: 1, filename: 'Document', location: null, shortLocation: null, snippet: '' })
+    expect(c).toEqual({
+      n: 2, documentId: 1, filename: 'Document', location: null, shortLocation: null, snippet: '',
+      filePath: null, language: null, startLine: null, endLine: null, isCode: false, // CODEBASE-FEATURE
+    })
+  })
+
+  // CODEBASE-FEATURE (Stage 3): source code citations
+  describe('source code', () => {
+    const code = (overrides = {}) =>
+      raw({ source_name: 'app.zip', file_path: 'auth/jwt.py', language: 'python', start_line: 40, end_line: 72, snippet: 'def verify():\n    pass', ...overrides })
+
+    it('names the file path, the lines and the language', () => {
+      expect(toCitation(code())).toMatchObject({
+        filename: 'auth/jwt.py', filePath: 'auth/jwt.py', language: 'python', startLine: 40, endLine: 72, isCode: true,
+        location: 'Lines 40-72', shortLocation: 'lines 40-72',
+      })
+    })
+
+    it('keeps the snippet exactly as sent (indentation and newlines)', () => {
+      expect(toCitation(code()).snippet).toBe('def verify():\n    pass')
+    })
+
+    it('a single line is not written as a range', () => {
+      expect(toCitation(code({ start_line: 5, end_line: 5 }))).toMatchObject({ location: 'Line 5', shortLocation: 'line 5' })
+    })
+
+    it('a code file with no line numbers (ingested before they existed) still shows its path', () => {
+      const c = toCitation(code({ start_line: null, end_line: null }))
+      expect(c).toMatchObject({ filename: 'auth/jwt.py', isCode: true, location: null, shortLocation: null })
+    })
+
+    it('a PDF citation is unchanged and is not code', () => {
+      expect(toCitation(raw({ page_number: 3 }))).toMatchObject({ filename: 'policy.pdf', isCode: false, location: 'Page 3', filePath: null })
+    })
+
+    it('an old saved citation without any of the new keys still works', () => {
+      const old = { marker: '[1]', document_id: 2, source_name: 'old.pdf', page_number: 1, snippet: 'x' }
+      expect(toCitation(old)).toMatchObject({ filename: 'old.pdf', isCode: false, startLine: null })
+    })
   })
 })

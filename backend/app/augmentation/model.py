@@ -15,6 +15,11 @@ class Citation:
     row_start: int | None = None       # ...and which rows the chunk covers
     row_end: int | None = None
     snippet: str | None = None         # the start of the cited passage, so a source card can show it
+    # CODEBASE-FEATURE: source code chunks (None for documents)
+    file_path: str | None = None       # path of the file (inside a zip: the path in the project)
+    start_line: int | None = None      # first and last line of the file the chunk covers (1-based)
+    end_line: int | None = None
+    language: str | None = None        # python, javascript, ...
 
 
 @dataclass

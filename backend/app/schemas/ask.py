@@ -24,6 +24,11 @@ class Citation(BaseModel):
     row_start: Optional[int] = None
     row_end: Optional[int] = None
     snippet: Optional[str] = None     # start of the cited passage, for the source card
+    # CODEBASE-FEATURE: source code chunks. All optional, so answers saved before they existed still load.
+    file_path: Optional[str] = None
+    start_line: Optional[int] = None
+    end_line: Optional[int] = None
+    language: Optional[str] = None
 
 
 class AskResponse(BaseModel):

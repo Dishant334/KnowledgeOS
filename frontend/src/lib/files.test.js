@@ -10,6 +10,11 @@ describe('validateFile', () => {
     expect(validateFile(file(name))).toBeNull()
   })
 
+  // CODEBASE-FEATURE (Stage 3): source code can be uploaded (the backend decides by extension)
+  it.each(['main.py', 'app.js', 'App.jsx', 'util.mjs', 'x.cjs', 'api.ts', 'Page.tsx', 'Main.java', 'util.c', 'util.h', 'a.cpp', 'a.hpp', 'a.cc', 'a.cxx', 'SRC.PY'])('accepts code file %s', (name) => {
+    expect(validateFile(file(name))).toBeNull()
+  })
+
   it.each(['photo.png', 'archive.zip', 'script.exe', 'no-extension'])('refuses %s', (name) => {
     expect(validateFile(file(name))).toMatch(/not supported/)
   })
@@ -35,6 +40,8 @@ describe('file names', () => {
     expect(fileTypeLabel('a.markdown')).toBe('MD')
     expect(fileTypeLabel('a.htm')).toBe('HTML')
     expect(fileTypeLabel('README')).toBe('FILE')
+    expect(fileTypeLabel('main.py')).toBe('PY') // CODEBASE-FEATURE
+    expect(fileTypeLabel('Page.tsx')).toBe('TSX')
   })
 })
 

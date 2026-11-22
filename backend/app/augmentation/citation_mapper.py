@@ -28,6 +28,15 @@ def make_snippet(text: str, max_chars: int = SNIPPET_CHARS) -> str:
     return text[:max_chars].rstrip() + "..."
 
 
+def make_code_snippet(text: str, max_chars: int = SNIPPET_CHARS) -> str:
+    """CODEBASE-FEATURE: like make_snippet but for code: newlines and indentation are KEPT (flattening them
+    would destroy the code). Only leading blank lines and trailing whitespace are removed."""
+    text = text.lstrip("\r\n").rstrip()
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars].rstrip() + "..."
+
+
 def build_citations(chunks: list[ScoredChunk]) -> list[Citation]:
     """
     Assigns a [1], [2], [3]... marker to each chunk in order, and maps
@@ -48,7 +57,15 @@ def build_citations(chunks: list[ScoredChunk]) -> list[Citation]:
                 sheet_name=metadata.get("sheet_name"),
                 row_start=metadata.get("row_start"),
                 row_end=metadata.get("row_end"),
-                snippet=make_snippet(scored_chunk.document.page_content),
+                snippet=(
+                    make_code_snippet(scored_chunk.document.page_content)   # CODEBASE-FEATURE
+                    if metadata.get("language")
+                    else make_snippet(scored_chunk.document.page_content)
+                ),
+                file_path=metadata.get("file_path"),                           # CODEBASE-FEATURE
+                start_line=metadata.get("start_line"),
+                end_line=metadata.get("end_line"),
+                language=metadata.get("language"),
             )
         )
     return citations
