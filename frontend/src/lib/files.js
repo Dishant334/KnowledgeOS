@@ -1,10 +1,19 @@
 // What the backend can read (backend/app/services/document.py) and how files are shown.
 
-// CODEBASE-FEATURE (Stage 3): source files the backend reads as code (policy.py TIER1_CODE). Stage 4 will make the
-// allowed types depend on the chat's mode; the backend decides by extension and applies its own checks too.
+// CODEBASE-FEATURE (Stage 4): what a chat accepts depends on its MODE, like on the backend (services/document.py):
+//   'docs' chat: documents only.   'code' chat: source code (policy.py TIER1_CODE) plus Markdown and text (a README).
+export const DOCUMENT_EXTENSIONS = ['.pdf', '.docx', '.pptx', '.xlsx', '.csv', '.txt', '.md', '.markdown', '.html', '.htm']
 export const CODE_EXTENSIONS = ['.py', '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.java', '.c', '.h', '.cpp', '.hpp', '.cc', '.cxx']
-export const ACCEPTED_EXTENSIONS = ['.pdf', '.docx', '.pptx', '.xlsx', '.csv', '.txt', '.md', '.markdown', '.html', '.htm', ...CODE_EXTENSIONS]
-export const ACCEPT_ATTRIBUTE = ACCEPTED_EXTENSIONS.join(',')
+const CODE_CHAT_EXTENSIONS = [...CODE_EXTENSIONS, '.md', '.markdown', '.txt']
+
+export function acceptedExtensionsFor(mode = 'docs') {
+  return mode === 'code' ? CODE_CHAT_EXTENSIONS : DOCUMENT_EXTENSIONS
+}
+
+// the value of the file picker's `accept` attribute
+export function acceptAttributeFor(mode = 'docs') {
+  return acceptedExtensionsFor(mode).join(',')
+}
 export const MAX_FILE_BYTES = 20 * 1024 * 1024 // the backend refuses anything larger (413)
 
 export function extensionOf(name = '') {
@@ -13,9 +22,18 @@ export function extensionOf(name = '') {
 }
 
 // A reason to refuse the file before uploading it, or null if it looks fine. (The backend checks again.)
-export function validateFile(file) {
-  if (!ACCEPTED_EXTENSIONS.includes(extensionOf(file.name))) {
-    return 'This file type is not supported. Use PDF, Word, PowerPoint, Excel, CSV, text, Markdown, HTML or a source code file (.py, .js, .ts, .java, .c, .cpp).'
+export function validateFile(file, mode = 'docs') {
+  const ext = extensionOf(file.name)
+  if (!acceptedExtensionsFor(mode).includes(ext)) {
+    if (mode === 'code' && DOCUMENT_EXTENSIONS.includes(ext)) {
+      return 'This is a Codebase chat: add source code (or Markdown or text), not documents. Start a Documents chat for those.'
+    }
+    if (mode !== 'code' && CODE_EXTENSIONS.includes(ext)) {
+      return 'Source code goes in a Codebase chat. Start a new chat and choose Codebase.'
+    }
+    return mode === 'code'
+      ? 'This file type is not supported in a Codebase chat. Use source code (.py, .js, .ts, .java, .c, .cpp), Markdown or text.'
+      : 'This file type is not supported. Use PDF, Word, PowerPoint, Excel, CSV, text, Markdown or HTML.'
   }
   if (file.size > MAX_FILE_BYTES) return 'This file is larger than 20 MB.'
   if (file.size === 0) return 'This file is empty.'

@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { ACCEPT_ATTRIBUTE } from '../../lib/files'
+import { acceptAttributeFor } from '../../lib/files'
 import { ripple } from '../../lib/ripple'
 import UploadChip from '../documents/UploadChip'
 
@@ -8,7 +8,8 @@ import UploadChip from '../documents/UploadChip'
 // the box moves from the middle to the bottom); each file shows as a chip above the box with its live status.
 // While an answer is being written (`busy`) the send button becomes a Stop button and Enter does not send.
 // `notice` is an optional element shown above everything (for example "your question is waiting for a document").
-export default function Composer({ value, onChange, onSubmit, uploads, busy = false, onStop, notice = null }) {
+// `mode` ('docs' | 'code'): decides which files the paperclip offers and the hint in the box (CODEBASE-FEATURE).
+export default function Composer({ value, onChange, onSubmit, uploads, busy = false, onStop, notice = null, mode = 'docs' }) {
   const input = useRef(null)
   const field = useRef(null)
 
@@ -42,7 +43,7 @@ export default function Composer({ value, onChange, onSubmit, uploads, busy = fa
             ref={input}
             type="file"
             multiple
-            accept={ACCEPT_ATTRIBUTE}
+            accept={acceptAttributeFor(mode)}
             hidden
             onChange={(e) => {
               uploads?.addFiles(e.target.files)
@@ -52,8 +53,8 @@ export default function Composer({ value, onChange, onSubmit, uploads, busy = fa
           <button
             type="button"
             onClick={() => input.current.click()}
-            aria-label="Add documents"
-            title="Add documents"
+            aria-label={mode === 'code' ? 'Add source files' : 'Add documents'}
+            title={mode === 'code' ? 'Add source files' : 'Add documents'}
             className="grid size-10 shrink-0 place-items-center rounded-xl text-stone-600 transition hover:bg-stone-100 hover:text-accent-ink focus-visible:outline-2 focus-visible:outline-brand-700 motion-safe:active:scale-95"
           >
             <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -71,7 +72,7 @@ export default function Composer({ value, onChange, onSubmit, uploads, busy = fa
                 if (value.trim() && !busy) onSubmit(value.trim())
               }
             }}
-            placeholder="Ask about your documents..."
+            placeholder={mode === 'code' ? 'Ask about your code...' : 'Ask about your documents...'}
             aria-label="Your question"
             className="max-h-36 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-ink placeholder:text-stone-500 focus:outline-none [field-sizing:content]"
           />

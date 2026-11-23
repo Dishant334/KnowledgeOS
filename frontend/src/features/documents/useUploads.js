@@ -15,7 +15,8 @@ const POLL_MS = 2500 // how often a processing document is checked
 // sending). reset() = a new chat: the list starts empty again (documents stay in the library).
 // getConversationId(): async, returns the id of the conversation the files belong to (ChatLayout creates it on the
 // first upload of a new chat). Every upload is attached to it.
-export function useUploads(getConversationId) {
+// mode ('docs' | 'code', CODEBASE-FEATURE): the chat's mode decides which files are accepted before anything is uploaded.
+export function useUploads(getConversationId, mode = 'docs') {
   const [items, setItems] = useState([])
   const queue = useRef(Promise.resolve())
   const controllers = useRef(new Map()) // key -> AbortController of the upload in flight
@@ -123,7 +124,7 @@ export function useUploads(getConversationId) {
     (fileList) => {
       for (const file of fileList) {
         const key = `${file.name}-${file.size}-${Math.random().toString(36).slice(2)}`
-        const problem = validateFile(file)
+        const problem = validateFile(file, mode)
         setItems((all) => [
           ...all,
           { key, name: file.name, size: file.size, status: problem ? 'rejected' : 'uploading', progress: 0, error: problem },
@@ -131,7 +132,7 @@ export function useUploads(getConversationId) {
         if (!problem) queue.current = queue.current.then(() => upload(key, file))
       }
     },
-    [upload],
+    [upload, mode],
   )
 
   // keep checking documents that are still being processed

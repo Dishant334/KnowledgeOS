@@ -12,6 +12,13 @@ NEED_DOCUMENT_REPLY = (
 )
 
 
-def reply_without_documents(text: str) -> tuple[str, bool]:
-    """(reply, abstained) for a real question asked in a chat without documents."""
-    return NEED_DOCUMENT_REPLY, True
+# CODEBASE-FEATURE: the same, for a code chat
+NEED_SOURCE_REPLY = (
+    "Please add a source file to this chat first (use the paperclip), then ask your question. "
+    "I only answer from the code in this chat."
+)
+
+
+def reply_without_documents(text: str, mode: str = "docs") -> tuple[str, bool]:
+    """(reply, abstained) for a real question asked in a chat without documents (or, in a code chat, without files)."""
+    return (NEED_SOURCE_REPLY if mode == "code" else NEED_DOCUMENT_REPLY), True

@@ -18,10 +18,11 @@ export async function deleteConversation(conversationId) {
   await api.delete(`/conversations/${conversationId}`)
 }
 
-// A new, empty conversation: { id, title: null, created_at, last_message_at, message_count: 0 }.
-// It is not listed until it has a message.
-export async function createConversation() {
-  const { data } = await api.post('/conversations')
+// A new, empty conversation: { id, title: null, created_at, last_message_at, message_count: 0, mode }.
+// It is not listed until it has a message. `mode` is 'docs' (documents) or 'code' (source code); it is fixed for the
+// life of the chat and the backend refuses files of the other kind (CODEBASE-FEATURE).
+export async function createConversation(mode = 'docs') {
+  const { data } = await api.post('/conversations', { mode })
   return data
 }
 

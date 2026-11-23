@@ -44,6 +44,7 @@ def _row(db: Session, conversation: Conversation) -> ConversationOut:
         created_at=conversation.created_at,
         last_message_at=newest or conversation.created_at,
         message_count=count,
+        mode=conversation.mode,  # CODEBASE-FEATURE
     )
 
 
@@ -73,17 +74,18 @@ def list_conversations(db: Session, user_id: int, limit: int = 50, offset: int =
             created_at=conversation.created_at,
             last_message_at=newest,
             message_count=count,
+            mode=conversation.mode,  # CODEBASE-FEATURE
         )
         for conversation, newest, count in rows
     ]
 
 
-def create_conversation(db: Session, user_id: int, title: str | None = None) -> ConversationOut:
+def create_conversation(db: Session, user_id: int, title: str | None = None, mode: str = "docs") -> ConversationOut:
     """
     A new, empty chat ("New chat"). Without a title it stays untitled until the first question,
     which then becomes the title (see ask_stream); a title given here is never replaced.
     """
-    conversation = Conversation(user_id=user_id, title=title)
+    conversation = Conversation(user_id=user_id, title=title, mode=mode)  # CODEBASE-FEATURE: fixed from now on
     db.add(conversation)
     db.commit()
     db.refresh(conversation)
@@ -124,6 +126,7 @@ def get_conversation(db: Session, user_id: int, conversation_id: UUID) -> Conver
         title=conversation.title,
         created_at=conversation.created_at,
         last_message_at=messages[-1].created_at if messages else conversation.created_at,
+        mode=conversation.mode,  # CODEBASE-FEATURE
         messages=[
             MessageOut(
                 id=message.id,

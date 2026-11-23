@@ -39,6 +39,17 @@ export default function ChatLayout() {
   const [draft, setDraft] = useState('')
   const navigate = useNavigate()
 
+  // CODEBASE-FEATURE (Stage 4): the chat's mode, 'docs' or 'code'. It is chosen on the new-chat screen and sent when the
+  // conversation is created (the first upload or question); from then on it is fixed (`chatStarted`). A saved chat
+  // takes its mode from the backend. The creation callback below reads it through a ref because it never changes.
+  const [mode, setMode] = useState('docs')
+  const [chatStarted, setChatStarted] = useState(false)
+  const modeRef = useRef(mode)
+  useEffect(() => {
+    modeRef.current = mode
+  }, [mode])
+  const modeLocked = Boolean(routeId) || chatStarted
+
   // The backend conversation this screen belongs to. A new chat has none until its first upload or first question:
   // the first of them creates it. One creation at a time: parallel calls share the same promise.
   const conversation = useRef({ id: null, pending: null })
@@ -46,9 +57,10 @@ export default function ChatLayout() {
     const current = conversation.current
     if (current.id) return current.id
     if (!current.pending) {
-      current.pending = createConversation()
+      current.pending = createConversation(modeRef.current)
         .then((created) => {
           current.id = created.id
+          setChatStarted(true) // CODEBASE-FEATURE: the mode is now fixed
           return created.id
         })
         .finally(() => {
@@ -58,7 +70,7 @@ export default function ChatLayout() {
     return current.pending
   }, [])
 
-  const uploads = useUploads(getConversationId) // owned here so uploads survive the box moving to the bottom
+  const uploads = useUploads(getConversationId, mode) // owned here so uploads survive the box moving to the bottom
   const list = useConversations() // the sidebar
   const [renaming, setRenaming] = useState(null) // the conversation whose name is being edited
   const [memoryOpen, setMemoryOpen] = useState(false)
@@ -118,6 +130,7 @@ export default function ChatLayout() {
     streaming.current?.abort()
     conversation.current = { id: routeId, pending: null }
     hasMessages.current = true // a saved chat is never discarded
+    setChatStarted(true)
     newAnswers.current = 0
     setActive(null)
     setLoadState('loading')
@@ -127,6 +140,7 @@ export default function ChatLayout() {
         setMessages(
           detail.messages.map((m) => ({ id: m.id, role: m.role, content: m.content, citations: (m.citations ?? []).map(toCitation) })),
         )
+        setMode(detail.mode ?? 'docs') // CODEBASE-FEATURE (chats saved before modes existed have none: documents)
         showExisting(documents)
         setLoadState(null)
       },
@@ -271,6 +285,8 @@ export default function ChatLayout() {
     setDraft('')
     setActive(null)
     uploads.reset()
+    setMode('docs') // CODEBASE-FEATURE: a new chat starts as a documents chat
+    setChatStarted(false)
     setDrawerOpen(false)
     navigate('/chat')
   }
@@ -326,11 +342,16 @@ export default function ChatLayout() {
             <ErrorBanner message={loadState.error} action={<Button variant="secondary" onClick={newChat}>New chat</Button>} />
           </div>
         ) : messages.length === 0 ? (
-          <EmptyChat composer={<Composer value={draft} onChange={setDraft} onSubmit={ask} uploads={uploads} busy={busy} onStop={stop} notice={waitingNotice} />} />
+          <EmptyChat
+            mode={mode}
+            onModeChange={setMode}
+            locked={modeLocked}
+            composer={<Composer value={draft} onChange={setDraft} onSubmit={ask} uploads={uploads} busy={busy} onStop={stop} notice={waitingNotice} mode={mode} />}
+          />
         ) : (
           <>
             <MessageList messages={messages} active={active} onOpen={open} onRetry={(m) => ask(m.question, { retryOf: m.id })} />
-            <Composer value={draft} onChange={setDraft} onSubmit={ask} uploads={uploads} busy={busy} onStop={stop} notice={waitingNotice} />
+            <Composer value={draft} onChange={setDraft} onSubmit={ask} uploads={uploads} busy={busy} onStop={stop} notice={waitingNotice} mode={mode} />
           </>
         )}
       </section>

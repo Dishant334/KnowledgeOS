@@ -62,7 +62,12 @@ def new_conversation(
     It is not listed until it has a message, and is removed (with the files uploaded only into it) if abandoned.
     """
     sweep_abandoned_conversations(db, current_user)
-    return create_conversation(db, user_id=current_user.id, title=body.title if body else None)
+    return create_conversation(
+        db,
+        user_id=current_user.id,
+        title=body.title if body else None,
+        mode=body.mode if body else "docs",  # CODEBASE-FEATURE
+    )
 
 
 @router.patch("/{conversation_id}", response_model=ConversationOut)

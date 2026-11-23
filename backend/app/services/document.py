@@ -56,6 +56,26 @@ _CODE_REFUSALS = {
 }
 
 
+# CODEBASE-FEATURE (Stage 4, S12): which kinds of file each chat mode accepts. A code chat takes source code plus
+# Markdown and text (a README); everything else is a document and belongs in a documents chat.
+CODE_CHAT_MIME_TYPES = frozenset({CODE_MIME_TYPE, "text/markdown", "text/plain"})
+
+_DOCS_CHAT_REFUSES_CODE = "This is a documents chat: source code files go in a codebase chat. Start a new chat and choose Codebase."
+_CODE_CHAT_REFUSES_DOCUMENT = (
+    "This is a codebase chat: add source code files (or Markdown or text), not documents such as PDF, Word, "
+    "spreadsheets or web pages. Start a documents chat for those."
+)
+
+
+def mode_refusal(mode: str, mime_type: str | None) -> str | None:
+    """Why a file of this type may not go into a chat of this mode (None = allowed). Enforced by the server."""
+    if mode == "code" and mime_type not in CODE_CHAT_MIME_TYPES:
+        return _CODE_CHAT_REFUSES_DOCUMENT
+    if mode != "code" and mime_type == CODE_MIME_TYPE:
+        return _DOCS_CHAT_REFUSES_CODE
+    return None
+
+
 def resolve_mime_type(content_type: str | None, filename: str) -> str | None:
     # CODEBASE-FEATURE: for source code the EXTENSION decides, whatever the client sent
     # (browsers label .ts as video/mp2t and .py as octet-stream or text/plain).
@@ -90,8 +110,20 @@ async def create_document(
         except LookupError:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
+    # CODEBASE-FEATURE (S12): the chat's mode decides which files it accepts. Checked twice: on the type of the
+    # incoming file BEFORE its bytes are read, and on the type of the document actually being linked (an upload of
+    # bytes the user already has links their EXISTING document, which keeps its own name and type).
+    if conversation is not None and file.filename:
+        incoming = resolve_mime_type(file.content_type, file.filename)
+        refusal = mode_refusal(conversation.mode, incoming) if incoming in ALLOWED_MIME_TYPES else None
+        if refusal:
+            raise HTTPException(status_code=400, detail=refusal)
+
     document, created = await _save_document(db, user, file)
     if conversation is not None:
+        refusal = mode_refusal(conversation.mode, document.mime_type)
+        if refusal:
+            raise HTTPException(status_code=400, detail=refusal)
         link_document(db, conversation.id, document.id, uploaded_here=created)   # links use the internal id
     return document
 

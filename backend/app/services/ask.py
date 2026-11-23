@@ -26,7 +26,7 @@ from app.services.conversation_memory import remember_if_due
 from app.services.conversations import conversation_document_ids
 from app.services.introductions import NAME_PREFIX, SelfFact, analyze_message, social_reply
 from app.services.retrieve import run_retrieval
-from app.services.small_talk import GREETING_REPLY, NEED_DOCUMENT_REPLY, reply_without_documents
+from app.services.small_talk import GREETING_REPLY, NEED_DOCUMENT_REPLY, NEED_SOURCE_REPLY, reply_without_documents
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ def _without_refused_turns(messages: list[tuple[str, str]]) -> list[tuple[str, s
         if role == "assistant" and skip_answer:
             skip_answer = False
             continue
-        if role == "assistant" and (content in (GREETING_REPLY, NEED_DOCUMENT_REPLY) or is_refusal(content)):
+        if role == "assistant" and (content in (GREETING_REPLY, NEED_DOCUMENT_REPLY, NEED_SOURCE_REPLY) or is_refusal(content)):
             if kept and kept[-1][0] == "user":
                 kept.pop()           # its question goes too
             continue
@@ -274,7 +274,7 @@ def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[
         return
 
     if not document_ids:
-        reply, abstained = reply_without_documents(request.query)
+        reply, abstained = reply_without_documents(request.query, conversation.mode if conversation is not None else "docs")  # CODEBASE-FEATURE
         yield "token", reply
         response, conversation = _save_turn(db, user_id, conversation, request.query, reply, [], abstained)
         if self_facts:

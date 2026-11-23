@@ -61,6 +61,25 @@ describe('useUploads', () => {
     expect(uploadDocument).not.toHaveBeenCalled()
   })
 
+  // CODEBASE-FEATURE (Stage 4): the chat's mode decides which files are accepted before anything is uploaded
+  it('in a Codebase chat a PDF is refused without uploading and source code is accepted', async () => {
+    vi.mocked(uploadDocument).mockResolvedValue({ id: 3, status: 'pending', failure_reason: null })
+    const { result } = renderHook(() => useUploads(getConversationId, 'code'))
+    act(() => result.current.addFiles([pdf, { name: 'main.py', size: 20 }]))
+    await flush()
+    expect(result.current.items[0]).toMatchObject({ name: 'policy.pdf', status: 'rejected', error: expect.stringMatching(/Codebase chat/) })
+    expect(result.current.items[1]).toMatchObject({ name: 'main.py', status: 'pending' })
+    expect(uploadDocument).toHaveBeenCalledTimes(1)
+  })
+
+  it('in a Documents chat source code is refused without uploading', async () => {
+    const { result } = renderHook(() => useUploads(getConversationId, 'docs'))
+    act(() => result.current.addFiles([{ name: 'main.py', size: 20 }]))
+    await flush()
+    expect(result.current.items[0]).toMatchObject({ status: 'rejected', error: expect.stringMatching(/Codebase/) })
+    expect(uploadDocument).not.toHaveBeenCalled()
+  })
+
   it('uploads one file at a time', async () => {
     let finishFirst
     vi.mocked(uploadDocument)

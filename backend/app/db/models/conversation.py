@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,6 +10,7 @@ from app.db.database import Base
 
 class Conversation(Base):
     __tablename__ = "conversations"
+    __table_args__ = (CheckConstraint("mode IN ('docs', 'code')", name="ck_conversations_mode"),)  # CODEBASE-FEATURE
 
     id: Mapped[int] = mapped_column(
         primary_key=True,
@@ -36,6 +37,16 @@ class Conversation(Base):
     title: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
+    )
+
+    # CODEBASE-FEATURE: 'docs' (questions about uploaded documents) or 'code' (questions about source code).
+    # Chosen when the chat is created and never changed (no route edits it); the server enforces which files
+    # a chat accepts (services/document.py).
+    mode: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+        default="docs",
+        server_default="docs",
     )
 
     # Rolling summary of the older part of the conversation. The messages

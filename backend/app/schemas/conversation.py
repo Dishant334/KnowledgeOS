@@ -1,6 +1,6 @@
 from datetime import datetime
 from uuid import UUID
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -12,10 +12,15 @@ from app.schemas.ask import Citation
 Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
 
 
+# CODEBASE-FEATURE
+Mode = Literal["docs", "code"]
+
+
 class ConversationCreate(BaseModel):
     """Body of POST /conversations (the whole body is optional)."""
 
     title: Title | None = None       # without one, the first question becomes the title
+    mode: Mode = "docs"              # fixed for the life of the chat: 'docs' (documents) or 'code' (source code)
 
 
 class ConversationRename(BaseModel):
@@ -30,6 +35,7 @@ class ConversationOut(BaseModel):
     created_at: datetime
     last_message_at: datetime        # when the newest message was written (the list is sorted by this)
     message_count: int
+    mode: Mode = "docs"              # CODEBASE-FEATURE
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -54,3 +60,4 @@ class ConversationDetailOut(BaseModel):
     created_at: datetime
     last_message_at: datetime
     messages: list[MessageOut]
+    mode: Mode = "docs"              # CODEBASE-FEATURE

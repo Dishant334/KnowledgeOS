@@ -155,4 +155,64 @@ describe('ChatLayout', () => {
     expect(await screen.findByText('This conversation does not exist.')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /New chat/ }).length).toBeGreaterThan(0)
   })
+
+  // CODEBASE-FEATURE (Stage 4): the chat's mode ("docs" or "code")
+  describe('chat mode', () => {
+    it('a new chat is a documents chat by default', async () => {
+      vi.mocked(askStream).mockResolvedValue(DONE)
+      const user = renderChat()
+      expect(screen.getByRole('radio', { name: /Documents/ })).toBeChecked()
+      await user.type(screen.getByRole('textbox', { name: 'Your question' }), 'Hello there?{Enter}')
+      await screen.findByText(/Employees get/)
+      expect(createConversation).toHaveBeenCalledWith('docs')
+    })
+
+    it('choosing Codebase creates the conversation in code mode', async () => {
+      vi.mocked(askStream).mockResolvedValue(DONE)
+      const user = renderChat()
+      await user.click(screen.getByRole('radio', { name: /Codebase/ }))
+      expect(screen.getByRole('radio', { name: /Codebase/ })).toBeChecked()
+      expect(screen.getByRole('heading', { name: 'Ask your codebase' })).toBeInTheDocument()
+      await user.type(screen.getByPlaceholderText('Ask about your code...'), 'Where is login handled?{Enter}')
+      await screen.findByText(/Employees get/)
+      expect(createConversation).toHaveBeenCalledWith('code')
+    })
+
+    it('the file picker offers only what the chosen mode accepts', async () => {
+      const user = renderChat()
+      const picker = () => document.querySelector('input[type=file]')
+      expect(picker().accept).toContain('.pdf')
+      expect(picker().accept).not.toContain('.py')
+      await user.click(screen.getByRole('radio', { name: /Codebase/ }))
+      expect(picker().accept).toContain('.py')
+      expect(picker().accept).not.toContain('.pdf')
+    })
+
+    it('opening a saved code chat shows its mode and does not let it be switched', async () => {
+      vi.mocked(getConversation).mockResolvedValue({ id: 'c-9', mode: 'code', messages: [] })
+      vi.mocked(listConversationDocuments).mockResolvedValue([])
+      renderChat('/chat/c-9')
+      expect(await screen.findByRole('radio', { name: /Codebase/ })).toBeChecked()
+      expect(screen.getByRole('radio', { name: /Documents/ })).toBeDisabled()
+      expect(screen.getByRole('radio', { name: /Codebase/ })).toBeDisabled()
+      expect(screen.getByText(/fixed once a chat has started/i)).toBeInTheDocument()
+    })
+
+    it('a saved chat from before modes existed opens as a documents chat', async () => {
+      vi.mocked(getConversation).mockResolvedValue({ id: 'c-8', messages: [] }) // no "mode" field
+      vi.mocked(listConversationDocuments).mockResolvedValue([])
+      renderChat('/chat/c-8')
+      expect(await screen.findByRole('radio', { name: /Documents/ })).toBeChecked()
+    })
+
+    it('New chat goes back to a documents chat', async () => {
+      vi.mocked(getConversation).mockResolvedValue({ id: 'c-9', mode: 'code', messages: [] })
+      vi.mocked(listConversationDocuments).mockResolvedValue([])
+      const user = renderChat('/chat/c-9')
+      await screen.findByRole('radio', { name: /Codebase/ })
+      await user.click(screen.getAllByRole('button', { name: /New chat/ })[0])
+      expect(await screen.findByRole('radio', { name: /Documents/ })).toBeChecked()
+      expect(screen.getByRole('radio', { name: /Codebase/ })).toBeEnabled()
+    })
+  })
 })
