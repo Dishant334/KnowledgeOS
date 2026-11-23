@@ -35,6 +35,9 @@ class ChunkingConfig:
     # Tables
     rows_per_chunk: int = 20
 
+    # Source code (CODEBASE-FEATURE): neighbouring small functions/statements are merged until a chunk reaches this size
+    code_min_chunk_tokens: int = 128
+
     # HTML
     html_headers_to_split_on: tuple[tuple[str, str], ...] = field(
         default_factory=lambda: (
@@ -60,6 +63,9 @@ class ChunkingConfig:
 
         if self.slide_max_tokens <= 0:
             raise ValueError("slide_max_tokens must be greater than 0")
+
+        if self.code_min_chunk_tokens < 0:
+            raise ValueError("code_min_chunk_tokens cannot be negative")
 
         if self.rows_per_chunk <= 0:
             raise ValueError("rows_per_chunk must be greater than 0")

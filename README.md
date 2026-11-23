@@ -159,11 +159,28 @@ Measured with the evaluation harness in [`backend/eval/`](backend/eval/README.md
 
 Adding BM25 to dense search fixes most misses: answers correct go from 0.74 to 0.93. Reranking then puts the right passage first more often (MRR 0.78 to 0.85) and lowers false refusals. RAGAS scores come from a small local judge on a 20-question sample, so they're useful for comparing columns, not as absolute numbers.
 
+### Chat with a codebase (in progress)
+
+A second mode answers questions about source code and cites `path · lines a-b`. It has its own evaluation in [`backend/eval_code/`](backend/eval_code/README.md) (separate from the one above): a frozen 24-file copy of this project, 25 questions (17 dev, 8 sealed test), the same three retrieval configurations, exact metrics plus RAGAS with the local Qwen3 8B judge. Dev split, comparing how code is cut into chunks (Stage 6, tree-sitter):
+
+| Metric (hybrid + rerank) | Splitter (baseline) | AST chunks | AST + file header |
+|---|---|---|---|
+| Hit@5 | 0.86 | 0.79 | 0.79 |
+| MRR | 0.77 | 0.80 | 0.83 |
+| Answers correct | 0.79 | 0.86 | 1.00 |
+| Cites the expected file AND its lines | 1.00 | 1.00 | 0.86 |
+| RAGAS faithfulness | 0.89 | 0.94 | 0.93 |
+| RAGAS context recall | 0.93 | 1.00 | 1.00 |
+| Tokens per question | about 2,190 | about 1,590 | about 1,610 |
+
+Under dense and hybrid search the AST chunker also improves retrieval (dense Hit@5 0.71 to 0.86, hybrid 0.86 to 0.93) and answers correct (up in all three configurations). Under hybrid + rerank, Hit@5 falls by one question (c13, a "global" question that is expected to fail) and citation line precision dips slightly. The `# File: path | symbols` header lifts answers correct further but lowers hybrid MRR (0.88 to 0.73) and line-accurate citations (1.00 to 0.86); its gain comes from three flipped questions and may be noise, so it stays **off** by default. **17 questions are few: one question is about 6 points**, so gaps of one or two questions are noise. The RAGAS judge is a small local model, so compare columns rather than trusting absolute values. The sealed test split (8 questions) has not been run yet. Full tables and the questions that flipped: [`backend/eval_code/results/comparison.md`](backend/eval_code/results/comparison.md).
+
+
 ### Tests
 
 | | Tests | What they cover |
 |---|---|---|
-| **Backend** (pytest) | **653 passing, 95% line coverage** | Mostly integration tests against **real** Postgres, Qdrant and Redis, the real embedding and reranking models, and a real Celery worker end to end. The LLM is faked for determinism, and a smaller set runs against real local Qwen. Includes auth, rate limits, ingestion of every file type, retrieval, citations, memory and prompt injection. |
+| **Backend** (pytest) | **974 passing** (95% line coverage was measured at 653 tests) | Mostly integration tests against **real** Postgres, Qdrant and Redis, the real embedding and reranking models, and a real Celery worker end to end. The LLM is faked for determinism, and a smaller set runs against real local Qwen. Includes auth, rate limits, ingestion of every file type, retrieval, citations, memory and prompt injection. |
 | **Frontend** (Vitest + Testing Library) | **119 passing, under 1 s** | Error mapping, the SSE stream parser (split chunks, cut-off streams, abort), components, upload and conversation hooks (with fake timers), and an integration test of the whole chat screen. The API and Clerk are mocked. |
 
 ## Security
@@ -199,6 +216,8 @@ Known gaps, documented as strict `xfail` tests so a fix shows up immediately:
 | Infrastructure | Docker Compose (Postgres, Qdrant, Redis, migrations, API, worker, health checks) |
 
 ## Running it locally
+
+> **One command (after the one-time setup below, on macOS):** `./dev.sh` starts Docker if needed, the databases, the migrations, the API, the worker and the frontend in one terminal (lines tagged `[api]`, `[worker]`, `[web]`), and opens the app. Ctrl+C, closing the terminal or quitting VS Code stops everything; `./dev.sh stop` does the same from another terminal. Database data is kept. It uses the local `.venv`, not the Docker `api`/`worker` containers.
 
 The backend runs entirely in Docker: one command starts Postgres, Qdrant, Redis, the database migrations, the API and the worker. The frontend runs with npm, and the LLM runs in Ollama on your machine.
 

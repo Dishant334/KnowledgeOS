@@ -1,0 +1,100 @@
+[
+ {
+  "id": "c01",
+  "faithfulness": 1.0,
+  "answer_relevancy": 0.8530763539076905,
+  "context_precision": 0.8666666666377778,
+  "context_recall": 1.0
+ },
+ {
+  "id": "c02",
+  "faithfulness": 1.0,
+  "answer_relevancy": 0.9378786639123168,
+  "context_precision": 0.9999999999,
+  "context_recall": 1.0
+ },
+ {
+  "id": "c03",
+  "faithfulness": 1.0,
+  "answer_relevancy": 0.9723402100940058,
+  "context_precision": 0.94999999997625,
+  "context_recall": 1.0
+ },
+ {
+  "id": "c04",
+  "faithfulness": 1.0,
+  "answer_relevancy": 0.9702524391636539,
+  "context_precision": 0.99999999995,
+  "context_recall": 1.0
+ },
+ {
+  "id": "c05",
+  "faithfulness": 0.5,
+  "answer_relevancy": 0.9504849684858145,
+  "context_precision": 0.9166666666361111,
+  "context_recall": 1.0
+ },
+ {
+  "id": "c06",
+  "faithfulness": 1.0,
+  "answer_relevancy": 0.6800829808743071,
+  "context_precision": 0.8055555555287036,
+  "context_recall": 1.0
+ },
+ {
+  "id": "c07",
+  "faithfulness": 1.0,
+  "answer_relevancy": 0.8933523810886287,
+  "context_precision": 0.9166666666361111,
+  "context_recall": 1.0
+ },
+ {
+  "id": "c08",
+  "faithfulness": 1.0,
+  "answer_relevancy": 0.8832785794895438,
+  "context_precision": 0.5833333333041666,
+  "context_recall": 1.0
+ },
+ {
+  "id": "c09",
+  "faithfulness": 1.0,
+  "answer_relevancy": 0.9481018189612976,
+  "context_precision": 0.9166666666361111,
+  "context_recall": 1.0
+ },
+ {
+  "id": "c10",
+  "faithfulness": 0.75,
+  "answer_relevancy": 0.9429593036278917,
+  "context_precision": 0.6999999999766667,
+  "context_recall": 1.0
+ },
+ {
+  "id": "c11",
+  "faithfulness": 1.0,
+  "answer_relevancy": 0.8880086055549589,
+  "context_precision": 0.8666666666377778,
+  "context_recall": 1.0
+ },
+ {
+  "id": "c12",
+  "faithfulness": 1.0,
+  "answer_relevancy": 0.9233146072100777,
+  "context_precision": 0.94999999997625,
+  "context_recall": 1.0
+ },
+ {
+  "id": "c13",
+  "faithfulness": 1.0,
+  "answer_relevancy": 0.8032268340222051,
+  "context_precision": 0.32499999998375,
+  "context_recall": 1.0
+ },
+ {
+  "id": "c14",
+  "faithfulness": 1.0,
+  "answer_relevancy": 0.9335293910646362,
+  "context_precision": 0.9999999999666667,
+  "context_recall": 1.0
+ }
+]

@@ -1,5 +1,7 @@
 import os
 
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings,SettingsConfigDict
 
@@ -23,6 +25,13 @@ class Settings(BaseSettings):
      # --- CORS (app/core/cors.py): browser origins allowed to call the API, comma-separated ---
      # Default: the Vite dev server. Deployed: set your real frontend address(es). Empty = CORS off.
      cors_origins: str = "http://localhost:5173"
+
+     # --- Source code chunking (CODEBASE-FEATURE, Stage 6) ---
+     #   ast       follow the syntax tree (tree-sitter): one chunk per function/method/class; falls back to the splitter per file
+     #   splitter  the Stage 2 keyword/line splitter only (also the instant way to switch the AST chunker off)
+     # code_chunk_header puts "# File: path | Class.method" in front of each chunk's text (both searches then see it).
+     code_chunker: Literal["ast", "splitter"] = "ast"
+     code_chunk_header: bool = False
 
      # --- Rate limiting (app/core/rate_limit.py; the counters live in Redis) ---
      # Per user. /ask and /ask/stream share one budget. If Redis is down the limiter lets requests through.

@@ -11,6 +11,7 @@ from langchain_text_splitters import (
     Language,  # CODEBASE-FEATURE
 )
 
+from app.ingestion.chunking.ast_chunker import ast_chunks  # CODEBASE-FEATURE
 from app.ingestion.chunking.base import ChunkingStrategy
 from app.ingestion.chunking.model import ChunkingConfig
 
@@ -215,8 +216,13 @@ class CodeChunkingStrategy(ChunkingStrategy):
     start mid-class. They are still never reformatted.
     """
 
-    def __init__(self, config: ChunkingConfig):
+    def __init__(self, config: ChunkingConfig, mode: str | None = None, header: bool | None = None):
+        from app.core.config import settings
+
         self.config = config
+        # Stage 6: "ast" (tree-sitter, falling back per file) or "splitter" (Stage 2 only). Defaults come from settings.
+        self.mode = mode if mode is not None else settings.code_chunker
+        self.header = header if header is not None else settings.code_chunk_header
         self._splitters: dict[str, RecursiveCharacterTextSplitter] = {}
 
     def _splitter_for(self, language: str) -> RecursiveCharacterTextSplitter:
@@ -237,8 +243,29 @@ class CodeChunkingStrategy(ChunkingStrategy):
         language = document.metadata.get("language")
         if language not in _CODE_LANGUAGES:
             raise ValueError(f"CodeChunkingStrategy needs a known 'language' in metadata, got {language!r}")
+        if self.mode == "ast":
+            produced = ast_chunks(
+                document.page_content,
+                language,
+                document.metadata.get("file_path") or document.metadata.get("source") or "",
+                chunk_size=self.config.chunk_size,
+                min_tokens=self.config.code_min_chunk_tokens,
+                encoding_name=self.config.encoding_name,
+                header=self.header,
+            )
+            if produced is not None:        # None = the tree cannot be used for this file: fall through to the splitter
+                return [
+                    Document(
+                        page_content=c.text,
+                        metadata={**document.metadata, "start_line": c.start_line, "end_line": c.end_line, "symbols": c.symbols, "chunker": "ast"},
+                    )
+                    for c in produced
+                ]
+
         chunks = self._splitter_for(language).split_documents([document])
-        return add_line_numbers(document.page_content, chunks)
+        for chunk in add_line_numbers(document.page_content, chunks):
+            chunk.metadata["chunker"] = "splitter"
+        return chunks
 
 
 def add_line_numbers(source: str, chunks: list[Document]) -> list[Document]:

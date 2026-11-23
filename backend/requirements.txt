@@ -29,6 +29,17 @@ redis==6.4.0                      # also imported directly by app/core/rate_limi
 langchain-core==1.7.4   # >=1.7 is required by ragas (langchain-openai)
 langchain-community==0.4.2        # document loaders
 langchain-text-splitters==1.1.2
+
+# --- Source code chunking (CODEBASE-FEATURE, Stage 6) ---
+# tree-sitter parses code into a syntax tree. Each grammar ships COMPILED inside its wheel (nothing is downloaded at runtime).
+tree-sitter==0.27.0
+tree-sitter-python==0.25.0
+tree-sitter-javascript==0.25.0     # also covers .jsx
+tree-sitter-typescript==0.23.2     # TypeScript and TSX
+tree-sitter-java==0.23.5
+tree-sitter-c==0.24.2
+tree-sitter-cpp==0.23.4
+
 langchain-qdrant==1.1.0
 qdrant-client==1.19.0
 fastembed==0.8.0                  # dense, sparse (BM25) and cross-encoder models

@@ -1,0 +1,31 @@
+{
+ "collection": "knowledgeos_eval_code",
+ "documents": 24,
+ "chunks": 85,
+ "chunks_per_document": {
+  "backend/app/augmentation/citation_mapper.py": 2,
+  "backend/app/augmentation/context_builder.py": 1,
+  "backend/app/core/cors.py": 1,
+  "backend/app/core/rate_limit.py": 6,
+  "backend/app/generation/orchestrator.py": 7,
+  "backend/app/ingestion/chunking/strategies.py": 7,
+  "backend/app/ingestion/codebase/policy.py": 5,
+  "backend/app/ingestion/hashing.py": 1,
+  "backend/app/ingestion/loaders/code_loader.py": 1,
+  "backend/app/memory/store.py": 4,
+  "backend/app/retrieval/filters.py": 1,
+  "backend/app/retrieval/multi_query.py": 2,
+  "backend/app/retrieval/orchestrator.py": 4,
+  "backend/app/schemas/document.py": 1,
+  "backend/app/services/conversations.py": 6,
+  "backend/app/services/document.py": 8,
+  "backend/app/services/introductions.py": 10,
+  "backend/app/services/small_talk.py": 1,
+  "frontend/src/api/askStream.js": 3,
+  "frontend/src/api/errors.js": 2,
+  "frontend/src/features/chat/citations.js": 2,
+  "frontend/src/features/documents/useUploads.js": 6,
+  "frontend/src/lib/files.js": 3,
+  "frontend/src/lib/ripple.js": 1
+ }
+}

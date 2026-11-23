@@ -160,7 +160,8 @@ def _chunk(source: str, filename: str, **config) -> list[Document]:
 
 def test_a_small_file_is_one_chunk_equal_to_the_source():
     [chunk] = _chunk(PY_SOURCE, "mod.py")
-    assert chunk.page_content == PY_SOURCE
+    # Stage 6: the AST chunker trims trailing whitespace of a chunk (a final newline); every line and all indentation stay
+    assert chunk.page_content == PY_SOURCE.rstrip()
     assert chunk.metadata["language"] == "python" and chunk.metadata["file_path"] == "mod.py"
     assert chunk.metadata["chunk_index"] == 0 and chunk.metadata["total_chunks"] == 1
 
@@ -229,7 +230,7 @@ def test_pipeline_keeps_code_byte_for_byte_and_does_not_clean_it(recorded_chunks
     source = "def f(x):\n    if x:\n        return None\n    if not x:\n        return None\n    return None\n"
     result = ingest_file(source.encode(), "f.py", CODE_MIME_TYPE, {"document_id": "1"})
     assert result.success, result.error
-    assert [c.page_content for c in recorded_chunks] == [source]
+    assert [c.page_content for c in recorded_chunks] == [source.rstrip()]       # (a final newline is trimmed; nothing else)
     assert recorded_chunks[0].page_content.count("return None") == 3
 
 
@@ -240,7 +241,7 @@ def test_pipeline_keeps_repeated_closing_braces_in_c(recorded_chunks):
     result = ingest_file(source.encode(), "f.c", CODE_MIME_TYPE, {"document_id": "1"})
     assert result.success, result.error
     text = "".join(c.page_content for c in recorded_chunks)
-    assert text == source and text.count("}") == 3
+    assert text == source.rstrip() and text.count("}") == 3
 
 
 def test_pipeline_reports_an_empty_code_file_as_failed(recorded_chunks):
@@ -364,7 +365,7 @@ def test_python_file_reaches_ready_and_is_retrievable(client, worker, qdrant, us
         assert meta["doc_type"] == "code" and meta["language"] == "python"
         assert meta["file_path"] == meta["source_name"] == "config_cache.py"
     # A small file is one chunk and arrives in Qdrant exactly as uploaded.
-    assert [p.payload["page_content"] for p in points] == [PY_SOURCE]
+    assert [p.payload["page_content"] for p in points] == [PY_SOURCE.rstrip()]
 
     uploaded_by = points[0].payload["metadata"]["uploaded_by"]
     store = get_vector_store(EmbeddingConfig())

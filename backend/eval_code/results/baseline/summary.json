@@ -1,0 +1,152 @@
+{
+ "dense": {
+  "questions": 17,
+  "hit@5": 0.7142857142857143,
+  "recall@5": 0.8095238095238095,
+  "precision@5": 0.2,
+  "mrr": 0.6011904761904762,
+  "hit_in_prompt": 0.7142857142857143,
+  "chunks_in_prompt": 5.0,
+  "answer_correct": 0.7142857142857143,
+  "false_abstention": 0.07142857142857142,
+  "citation_hit": 0.9285714285714286,
+  "citation_precision": 1.0,
+  "citation_line_hit": 0.9285714285714286,
+  "citation_line_precision": 0.8461538461538461,
+  "refuses_out_of_scope": 1.0,
+  "retrieval_ms_p50": 371.5815410250798,
+  "generation_s_p50": 6.851176999974996,
+  "generation_s_p95": 10.707317833090201,
+  "tokens_per_question": 2044.6470588235295,
+  "hit@5_by_type": {
+   "direct": [
+    0.8,
+    5
+   ],
+   "paraphrase": [
+    1.0,
+    3
+   ],
+   "distractor": [
+    1.0,
+    2
+   ],
+   "multi": [
+    0.5,
+    2
+   ],
+   "global": [
+    0.0,
+    2
+   ]
+  },
+  "ragas_faithfulness": 0.8214285714285714,
+  "ragas_faithfulness_valid": "14/14",
+  "ragas_answer_relevancy": 0.8469555626845571,
+  "ragas_answer_relevancy_valid": "14/14",
+  "ragas_context_precision": 0.7229166666293675,
+  "ragas_context_precision_valid": "14/14",
+  "ragas_context_recall": 0.7857142857142857,
+  "ragas_context_recall_valid": "14/14"
+ },
+ "hybrid": {
+  "questions": 17,
+  "hit@5": 0.8571428571428571,
+  "recall@5": 0.9404761904761905,
+  "precision@5": 0.24285714285714288,
+  "mrr": 0.880952380952381,
+  "hit_in_prompt": 0.8571428571428571,
+  "chunks_in_prompt": 5.0,
+  "answer_correct": 0.7857142857142857,
+  "false_abstention": 0.0,
+  "citation_hit": 1.0,
+  "citation_precision": 0.9761904761904762,
+  "citation_line_hit": 1.0,
+  "citation_line_precision": 0.9761904761904762,
+  "refuses_out_of_scope": 0.6666666666666666,
+  "retrieval_ms_p50": 346.966499928385,
+  "generation_s_p50": 8.69253529200796,
+  "generation_s_p95": 16.843453250010498,
+  "tokens_per_question": 2142.1176470588234,
+  "hit@5_by_type": {
+   "direct": [
+    1.0,
+    5
+   ],
+   "paraphrase": [
+    1.0,
+    3
+   ],
+   "distractor": [
+    1.0,
+    2
+   ],
+   "multi": [
+    0.5,
+    2
+   ],
+   "global": [
+    0.5,
+    2
+   ]
+  },
+  "ragas_faithfulness": 0.9464285714285714,
+  "ragas_faithfulness_valid": "14/14",
+  "ragas_answer_relevancy": 0.915449483522188,
+  "ragas_answer_relevancy_valid": "14/14",
+  "ragas_context_precision": 0.9190476190030655,
+  "ragas_context_precision_valid": "14/14",
+  "ragas_context_recall": 1.0,
+  "ragas_context_recall_valid": "14/14"
+ },
+ "hybrid+rerank": {
+  "questions": 17,
+  "hit@5": 0.8571428571428571,
+  "recall@5": 0.9285714285714286,
+  "precision@5": 0.24285714285714288,
+  "mrr": 0.7738095238095238,
+  "hit_in_prompt": 0.8571428571428571,
+  "chunks_in_prompt": 5.0,
+  "answer_correct": 0.7857142857142857,
+  "false_abstention": 0.0,
+  "citation_hit": 1.0,
+  "citation_precision": 0.9761904761904762,
+  "citation_line_hit": 1.0,
+  "citation_line_precision": 0.9642857142857143,
+  "refuses_out_of_scope": 1.0,
+  "retrieval_ms_p50": 3217.742958921008,
+  "generation_s_p50": 9.825441334047355,
+  "generation_s_p95": 15.929232749971561,
+  "tokens_per_question": 2191.0588235294117,
+  "hit@5_by_type": {
+   "direct": [
+    1.0,
+    5
+   ],
+   "paraphrase": [
+    1.0,
+    3
+   ],
+   "distractor": [
+    1.0,
+    2
+   ],
+   "multi": [
+    0.0,
+    2
+   ],
+   "global": [
+    1.0,
+    2
+   ]
+  },
+  "ragas_faithfulness": 0.8928571428571429,
+  "ragas_faithfulness_valid": "14/14",
+  "ragas_answer_relevancy": 0.9021662183103702,
+  "ragas_answer_relevancy_valid": "14/14",
+  "ragas_context_precision": 0.8236111110741634,
+  "ragas_context_precision_valid": "14/14",
+  "ragas_context_recall": 0.9285714285714286,
+  "ragas_context_recall_valid": "14/14"
+ }
+}
