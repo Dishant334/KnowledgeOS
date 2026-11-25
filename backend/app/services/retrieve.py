@@ -23,6 +23,7 @@ def run_retrieval(
     top_k: int = 5,
     doc_type: str | None = None,
     document_ids: list[int] | None = None,
+    mode: str = "docs",
 ) -> RetrievalResult:
     """Runs the retrieval pipeline; turns Qdrant outages into a 503."""
     config = RetrievalConfig(final_top_k=top_k, candidate_pool_size=max(30, top_k))
@@ -35,6 +36,7 @@ def run_retrieval(
             history=history,
             retrieval_config=config,
             doc_type=doc_type,
+            mode=mode,
             # payload ids are strings
             document_ids=[str(i) for i in document_ids] if document_ids else None,
         )

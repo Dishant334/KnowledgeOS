@@ -288,6 +288,7 @@ def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[
         llm=llm,
         history=_history_as_text(summary, history, memories),
         document_ids=document_ids,
+        mode=conversation.mode if conversation is not None else "docs",
     )
 
     generation = None

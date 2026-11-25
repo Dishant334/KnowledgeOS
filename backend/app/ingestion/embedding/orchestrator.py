@@ -8,6 +8,8 @@ from langchain_core.documents import Document
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 
+from app.core.config import settings
+from app.ingestion.embedding.identifiers import splitting
 from app.ingestion.embedding.models import EmbeddingConfig
 from app.ingestion.embedding.vector_store import delete_document_points, get_vector_store
 
@@ -140,10 +142,13 @@ class EmbeddingOrchestrator:
         documents: list[Document],
         ids: list[str],
     ) -> None:
-        self.vector_store.add_documents(
-            documents=documents,
-            ids=ids,
-        )
+        # Code chunks also get their identifiers split for keyword search (Stage 7); documents never do.
+        is_code = settings.code_split_identifiers and all(d.metadata.get("doc_type") == "code" for d in documents)
+        with splitting(is_code):
+            self.vector_store.add_documents(
+                documents=documents,
+                ids=ids,
+            )
 
     @staticmethod
     def _make_id(

@@ -26,6 +26,7 @@ def retrieve_chunks(config: str, question: str):
     """Returns the top-K chunks (as ScoredChunk objects, the type the generator expects)."""
     from langchain_qdrant import QdrantVectorStore, RetrievalMode
 
+    from app.core.config import settings
     from app.retrieval.filters import build_qdrant_filter
     from app.retrieval.hybrid_search import hybrid_search
     from app.retrieval.model import RetrievalConfig, ScoredChunk
@@ -43,10 +44,11 @@ def retrieve_chunks(config: str, question: str):
         return [ScoredChunk(document=doc, fused_score=score) for doc, score in hits]
 
     if config == "hybrid":
-        return hybrid_search(hybrid_store, question, k=K, qdrant_filter=user_filter)
+        return hybrid_search(hybrid_store, question, k=K, qdrant_filter=user_filter,
+                             split_identifiers=settings.code_split_identifiers)   # the eval corpus is a code chat
 
     if config == "hybrid+rerank":
-        return retrieve(question, user_id=EVAL_USER_ID, retrieval_config=RetrievalConfig(final_top_k=K)).chunks
+        return retrieve(question, user_id=EVAL_USER_ID, retrieval_config=RetrievalConfig(final_top_k=K), mode="code").chunks
 
     raise ValueError(f"unknown config {config!r}; use one of {CONFIG_NAMES}")
 

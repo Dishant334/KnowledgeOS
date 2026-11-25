@@ -40,6 +40,8 @@ def parse_args(argv=None):
                    help="how source files are chunked (default: the app's CODE_CHUNKER setting)")
     p.add_argument("--code-header", default=None, choices=["on", "off"],
                    help="put '# File: path | symbol' in front of each chunk (default: the app's CODE_CHUNK_HEADER setting)")
+    p.add_argument("--identifiers", default=None, choices=["on", "off"],
+                   help="keyword search also sees the parts of identifiers, take_token -> take token (default: the app's CODE_SPLIT_IDENTIFIERS)")
     p.add_argument("--configs", nargs="+", default=CONFIG_NAMES, choices=CONFIG_NAMES, help="retrieval configurations to compare")
     p.add_argument("--limit", type=int, default=None, help="only the first N golden questions (quick test)")
     p.add_argument("--types", nargs="+", default=None, help="only these question types (direct, paraphrase, ...)")
@@ -62,6 +64,8 @@ def configure_environment(args) -> None:
         os.environ["CODE_CHUNKER"] = args.code_chunker
     if args.code_header:
         os.environ["CODE_CHUNK_HEADER"] = "true" if args.code_header == "on" else "false"
+    if args.identifiers:
+        os.environ["CODE_SPLIT_IDENTIFIERS"] = "true" if args.identifiers == "on" else "false"
     os.environ["LANGSMITH_TRACING"] = "true" if args.trace else "false"
     os.environ.setdefault("UNSTRUCTURED_DISABLE_NOTICE", "1")
     os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
@@ -131,7 +135,7 @@ def main(argv=None) -> Path:
         print("NOTE: the test split is sealed on purpose. Run it ONCE, for the final numbers, not while tuning.", flush=True)
 
     print(f"[1/4] ingesting the corpus into collection '{settings.qdrant_collection}' (chunker: {settings.code_chunker}, "
-          f"header {'on' if settings.code_chunk_header else 'off'})", flush=True)
+          f"header {'on' if settings.code_chunk_header else 'off'}, identifiers {'split' if settings.code_split_identifiers else 'whole'})", flush=True)
     corpus_info = {"documents": 0, "chunks": 0}
     if not args.skip_ingest:
         corpus_info = load_or_run(out_dir / "corpus.json", reuse, ingest_corpus)
@@ -178,7 +182,8 @@ def main(argv=None) -> Path:
 
     print("[4/4] writing the report", flush=True)
     summaries = {c: summarise_config(samples_by_config[c], golden, ragas_by_config.get(c)) for c in args.configs}
-    chunking = f"{settings.code_chunker}, header {'on' if settings.code_chunk_header else 'off'}"
+    chunking = (f"{settings.code_chunker}, header {'on' if settings.code_chunk_header else 'off'}, "
+                f"identifiers {'split' if settings.code_split_identifiers else 'whole'}")
     info = {
         "date": datetime.now().strftime("%Y-%m-%d %H:%M"), "questions": len(golden_list),
         "answerable": sum(g["answerable"] for g in golden_list), **corpus_info, "split": args.split, "chunking": chunking,

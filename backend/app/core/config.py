@@ -32,6 +32,8 @@ class Settings(BaseSettings):
      # code_chunk_header puts "# File: path | Class.method" in front of each chunk's text (both searches then see it).
      code_chunker: Literal["ast", "splitter"] = "ast"
      code_chunk_header: bool = False
+     # Identifier-aware keyword search (code chats only): BM25 also sees the parts of take_token / TokenBucket.
+     code_split_identifiers: bool = True
 
      # --- Rate limiting (app/core/rate_limit.py; the counters live in Redis) ---
      # Per user. /ask and /ask/stream share one budget. If Redis is down the limiter lets requests through.

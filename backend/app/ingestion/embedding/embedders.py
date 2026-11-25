@@ -5,6 +5,7 @@ from langchain_core.embeddings import Embeddings
 from langchain_qdrant import SparseEmbeddings #for data format
 from langchain_qdrant.sparse_embeddings import SparseVector  #for data format 
 
+from app.ingestion.embedding.identifiers import expand_identifiers, splitting_enabled
 from app.ingestion.embedding.models import EmbeddingConfig
 
 
@@ -58,6 +59,8 @@ class BM25SparseEmbedder(SparseEmbeddings):
         self._model = SparseTextEmbedding(model_name=config.sparse_model_name, cache_dir=config.cache_dir)
 
     def embed_documents(self, texts: list[str]) -> list[SparseVector]:
+        if splitting_enabled():   # code mode: also index the parts of identifiers (take_token -> take, token)
+            texts = [expand_identifiers(t) for t in texts]
         results = self._model.embed(texts, batch_size=self.config.batch_size)
         return [
             SparseVector(indices=r.indices.tolist(), values=r.values.tolist())
@@ -68,6 +71,8 @@ class BM25SparseEmbedder(SparseEmbeddings):
         # query_embed (not embed): BM25's TF saturation / length normalization
         # belongs on the document side only. The query side marks each term as
         # present (weight 1); Qdrant applies IDF (modifier=IDF).
+        if splitting_enabled():   # must match the document side, see identifiers.py
+            text = expand_identifiers(text)
         result = next(iter(self._model.query_embed(text)))
         return SparseVector(
             indices=result.indices.tolist(),

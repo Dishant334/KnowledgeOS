@@ -1,16 +1,18 @@
 # app/retrieval/hybrid_search.py
 
+from app.ingestion.embedding.identifiers import splitting
 from app.core.tracing import describe_chunks, pick, traceable
 from app.retrieval.model import ScoredChunk
 
 
 @traceable(name="hybrid_search", run_type="retriever", process_inputs=pick("query", "k"), process_outputs=describe_chunks)
-def hybrid_search(vector_store, query: str, k: int, qdrant_filter=None) -> list[ScoredChunk]:
+def hybrid_search(vector_store, query: str, k: int, qdrant_filter=None, split_identifiers: bool = False) -> list[ScoredChunk]:
     """
     One query variant's hybrid search: dense (BGE-M3) + sparse (BM25),
     fused server-side via Qdrant's native RRF 
     """
-    results = vector_store.similarity_search_with_score(query, k=k, filter=qdrant_filter)
+    with splitting(split_identifiers):   # code chats only: keyword search also sees the parts of identifiers
+        results = vector_store.similarity_search_with_score(query, k=k, filter=qdrant_filter)
     return [
         ScoredChunk(document=doc, fused_score=score, query_variant=query)
         for doc, score in results

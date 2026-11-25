@@ -3,6 +3,7 @@
 import logging
 from functools import lru_cache
 
+from app.core.config import settings
 from app.core.tracing import describe_chunks, traceable
 from app.ingestion.embedding.models import EmbeddingConfig
 from app.ingestion.embedding.orchestrator import EmbeddingOrchestrator
@@ -72,6 +73,7 @@ def retrieve(
     retrieval_config: RetrievalConfig | None = None,   # NOT named `config`: @traceable treats `config` as a LangChain RunnableConfig
     doc_type: str | None = None,
     document_ids: list[str] | None = None,
+    mode: str = "docs",   # the chat's mode: identifier-aware keyword search only in a code chat
 ) -> RetrievalResult:
     """
     Runs the full retrieval chain for one question:
@@ -110,6 +112,7 @@ def retrieve(
             query=variant,
             k=config.hybrid_search_k,
             qdrant_filter=qdrant_filter,
+            split_identifiers=(mode == "code" and settings.code_split_identifiers),
         )
         all_chunks.extend(chunks)
 
