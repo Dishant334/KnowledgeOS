@@ -5,6 +5,7 @@ from dataclasses import asdict
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.augmentation.code_budget import top_k_for
 from app.core.tracing import traceable
 from app.db.models.conversation import Conversation
 from app.db.models.messages import Message
@@ -17,6 +18,7 @@ from app.generation.orchestrator import (
     stream_answer,
     trim_history,
 )
+from app.generation.code_local_model import llm_for_mode
 from app.generation.summary import format_messages, split_for_summary, summarize
 from app.memory.consolidate import update_long_term_memory
 from app.memory import store as memory_store
@@ -255,6 +257,8 @@ def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[
         history = trim_history(_without_refused_turns(unsummarized))  # safety net only: normally already small thanks to the summary
 
     document_ids = conversation_document_ids(db, conversation.id) if conversation is not None else []
+    mode = conversation.mode if conversation is not None else "docs"
+    llm = llm_for_mode(llm, mode)   # S7: a code chat never reaches the cloud fallback unless allowed
 
     # Greetings, small talk and introductions ("hello, how are you? myself Dishant, what's your name?") get one
     # friendly reply in ANY chat, with no search and no LLM call; self-facts are remembered at once. A message that
@@ -288,12 +292,13 @@ def ask_stream(db: Session, user_id: int, request: AskRequest, llm) -> Iterator[
         llm=llm,
         history=_history_as_text(summary, history, memories),
         document_ids=document_ids,
-        mode=conversation.mode if conversation is not None else "docs",
+        mode=mode,
+        top_k=top_k_for(mode),
     )
 
     generation = None
     try:
-        for kind, value in stream_answer(request.query, llm, retrieval.chunks, history, summary, memories):
+        for kind, value in stream_answer(request.query, llm, retrieval.chunks, history, summary, memories, mode):
             if kind == "token":
                 yield "token", value
             else:

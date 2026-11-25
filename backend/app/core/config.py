@@ -34,6 +34,12 @@ class Settings(BaseSettings):
      code_chunk_header: bool = False
      # Identifier-aware keyword search (code chats only): BM25 also sees the parts of take_token / TokenBucket.
      code_split_identifiers: bool = True
+     # Code prompt budget (Stage 8). Documents keep 3,000 tokens and 5 chunks. Capped at 4,500 so that context + history +
+     # summary + memory + answer still fit Ollama's 8,192-token window.
+     code_context_tokens: int = Field(3000, ge=500, le=4500)
+     code_top_k: int = Field(5, ge=1, le=12)
+     # S7: a code chat answers with the primary model only. True lets the cloud fallback see the retrieved source code.
+     code_allow_cloud_fallback: bool = False
 
      # --- Rate limiting (app/core/rate_limit.py; the counters live in Redis) ---
      # Per user. /ask and /ask/stream share one budget. If Redis is down the limiter lets requests through.

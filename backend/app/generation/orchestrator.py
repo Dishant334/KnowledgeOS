@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from app.augmentation.model import Citation
 from app.core.tracing import traceable
 from app.retrieval.model import ScoredChunk
+from app.augmentation.code_budget import get_code_context_builder
 from app.augmentation.context_builder import ContextBuilder
 from app.generation.chain import build_generation_chain
 from app.generation.models import GenerationResult
@@ -215,6 +216,7 @@ def stream_answer(
     history: list[tuple[str, str]] | None = None,
     summary: str = "",
     memories: list[str] | None = None,
+    mode: str = "docs",
 ) -> Iterator[tuple[str, object]]:
     """
     The answer, piece by piece. Yields ("token", text) for every piece the model produces,
@@ -233,13 +235,14 @@ def stream_answer(
         yield from _refusal_events()
         return
 
-    augmented = get_context_builder().build(chunks)
+    builder = get_code_context_builder() if mode == "code" else get_context_builder()
+    augmented = builder.build(chunks)
     if augmented.chunks_used == 0:
         logger.warning("All %d retrieved chunks are bigger than the context budget", len(chunks))
         yield from _refusal_events()
         return
 
-    chain = build_generation_chain(llm)
+    chain = build_generation_chain(llm, mode)
     pieces = []
     for piece in chain.stream(
         {
@@ -285,13 +288,14 @@ def generate_answer(
     history: list[tuple[str, str]] | None = None,
     summary: str = "",
     memories: list[str] | None = None,
+    mode: str = "docs",
 ) -> GenerationResult:
     """
     The whole answer at once: runs stream_answer and returns its final result.
     Used where nobody needs the text as it is produced (the JSON /ask endpoint, the evaluation).
     """
     result = None
-    for kind, value in stream_answer(question, llm, chunks, history, summary, memories):
+    for kind, value in stream_answer(question, llm, chunks, history, summary, memories, mode):
         if kind == "final":
             result = value
     return result
