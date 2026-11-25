@@ -1,6 +1,6 @@
 # Code RAG evaluation report
 
-_2026-11-24 01:41 | 17 questions (14 answerable, 3 out of scope) | corpus: 24 source files, 129 chunks | split: dev | chunking: ast, header on_
+_2026-11-25 23:47 | 17 questions (14 answerable, 3 out of scope) | corpus: 24 source files, 129 chunks | split: dev | chunking: ast, header off, identifiers split_
 
 Generator: **ollama (qwen3:8b)** | RAGAS judge: **ollama (qwen3:8b)** | embeddings: BAAI/bge-large-en-v1.5 + BM25 | reranker: BAAI/bge-reranker-base | cost: 0
 
@@ -11,11 +11,11 @@ Higher is better. Hit@5 and Recall@5 say whether the answer was found; Precision
 
 | metric | dense | hybrid | hybrid+rerank |
 |---|---|---|---|
-| Hit@5 (all needed passages found) | 0.79 | 0.86 | 0.79 |
-| Recall@5 | 0.82 | 0.88 | 0.90 |
-| Precision@5 (fraction of chunks that are relevant) | 0.19 | 0.21 | 0.23 |
-| MRR (right chunk near the top) | 0.65 | 0.73 | 0.83 |
-| Needed passage actually reached the LLM (Hit in prompt) | 0.79 | 0.86 | 0.79 |
+| Hit@5 (all needed passages found) | 0.86 | 0.93 | 0.79 |
+| Recall@5 | 0.92 | 0.95 | 0.90 |
+| Precision@5 (fraction of chunks that are relevant) | 0.23 | 0.24 | 0.23 |
+| MRR (right chunk near the top) | 0.77 | 0.79 | 0.80 |
+| Needed passage actually reached the LLM (Hit in prompt) | 0.86 | 0.93 | 0.79 |
 | Chunks that fit in the prompt (of 5) | 5.0 | 5.0 | 5.0 |
 
 ## 2. RAGAS (LLM-as-judge, 0 to 1)
@@ -24,22 +24,22 @@ Judge: ollama (qwen3:8b). Use the DIFFERENCES between columns; a small local jud
 
 | metric | dense | hybrid | hybrid+rerank |
 |---|---|---|---|
-| Faithfulness (no hallucination) | 0.85 | 0.87 | 0.93 |
-| Answer relevancy | 0.90 | 0.90 | 0.89 |
-| Context precision | 0.85 | 0.91 | 0.94 |
-| Context recall | 0.82 | 0.94 | 1.00 |
+| Faithfulness (no hallucination) | 0.96 | 0.96 | 0.94 |
+| Answer relevancy | 0.90 | 0.91 | 0.91 |
+| Context precision | 0.78 | 0.80 | 0.89 |
+| Context recall | 0.93 | 1.00 | 1.00 |
 
 ## 3. Answer behaviour (exact checks)
 
 | metric | dense | hybrid | hybrid+rerank |
 |---|---|---|---|
-| Answers correct (matches golden answer) | 0.86 | 0.93 | 1.00 |
+| Answers correct (matches golden answer) | 0.79 | 0.86 | 0.86 |
 | False refusals (said no although answerable) | 0.00 | 0.00 | 0.00 |
 | Cites an expected file | 1.00 | 1.00 | 1.00 |
-| Citation precision | 1.00 | 0.96 | 1.00 |
-| Cites the expected file AND its lines | 0.86 | 0.86 | 0.86 |
-| Citation line precision (citations on target) | 0.81 | 0.83 | 0.82 |
-| Refuses out-of-scope questions | 1.00 | 1.00 | 1.00 |
+| Citation precision | 1.00 | 1.00 | 1.00 |
+| Cites the expected file AND its lines | 1.00 | 1.00 | 1.00 |
+| Citation line precision (citations on target) | 0.90 | 0.94 | 0.90 |
+| Refuses out-of-scope questions | 1.00 | 0.67 | 1.00 |
 
 ## 4. Cost and speed
 
@@ -47,10 +47,10 @@ Cost per query is 0 (local models only). Latencies come from a laptop that was a
 
 | metric | dense | hybrid | hybrid+rerank |
 |---|---|---|---|
-| Retrieval latency p50 (ms) | 285 | 313 | 2802 |
-| Generation latency p50 (s) | 6.3 | 5.8 | 6.3 |
-| Generation latency p95 (s) | 12.6 | 12.8 | 10.4 |
-| Tokens per question | 1511 | 1585 | 1609 |
+| Retrieval latency p50 (ms) | 224 | 257 | 2627 |
+| Generation latency p50 (s) | 5.1 | 5.8 | 6.0 |
+| Generation latency p95 (s) | 7.7 | 8.9 | 10.9 |
+| Tokens per question | 1505 | 1538 | 1613 |
 
 ## 5. Hit@5 by question type
 
@@ -59,13 +59,14 @@ Cost per query is 0 (local models only). Latencies come from a laptop that was a
 | direct (5) | 1.00 | 1.00 | 1.00 |
 | distractor (2) | 1.00 | 1.00 | 1.00 |
 | global (2) | 0.00 | 0.50 | 0.50 |
-| multi (2) | 0.50 | 0.50 | 0.00 |
+| multi (2) | 1.00 | 1.00 | 0.00 |
 | paraphrase (3) | 1.00 | 1.00 | 1.00 |
 
 ## 6. Questions still failing in 'hybrid+rerank' (where to look next)
 
-- c11 (multi): What upload size limit does the backend enforce, and what does the frontend say when a file is bigger?  ->  'The backend enforces a file size limit of 20 MB. If a file exceeds this limit, the backend raises an HTTPExcep'
-- c12 (multi): How does the backend recognise a secret-looking code file name, and what message does the user get?  ->  "The backend recognises a secret-looking code file name by checking the file's name against a set of predefined"
-- c13 (global): In which files is the 20 MB file size limit written down?  ->  'The 20 MB file size limit is written down in the following files:\n\n1. In the `frontend/src/lib/files.js` file,'
+- c11 (multi): What upload size limit does the backend enforce, and what does the frontend say when a file is bigger?  ->  'The backend enforces a maximum file size limit of 20 MB. If a file exceeds this size, the backend will refuse '
+- c12 (multi): How does the backend recognise a secret-looking code file name, and what message does the user get?  ->  "The backend recognises a secret-looking code file name by checking the file's name against predefined policies"
+- c13 (global): In which files is the 20 MB file size limit written down?  ->  'The 20 MB file size limit is mentioned in the following files:\n\n1. In the JavaScript file, the limit is define'
+- c14 (global): Which parts of the project produce or handle a 429 Too Many Requests response?  ->  'The parts of the project that produce or handle a 429 Too Many Requests response include:\n\n1. The `reject` fun'
 
-_commit bdd9773_
+_commit 29202e2_
