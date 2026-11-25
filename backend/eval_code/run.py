@@ -42,6 +42,10 @@ def parse_args(argv=None):
                    help="put '# File: path | symbol' in front of each chunk (default: the app's CODE_CHUNK_HEADER setting)")
     p.add_argument("--identifiers", default=None, choices=["on", "off"],
                    help="keyword search also sees the parts of identifiers, take_token -> take token (default: the app's CODE_SPLIT_IDENTIFIERS)")
+    p.add_argument("--prompt", default="code", choices=["docs", "code"],
+                   help="which prompt and context budget the answers use: the code chat's (default) or the documents one (the Stage 1-7 runs)")
+    p.add_argument("--top-k", type=int, default=None, help="chunks handed to the LLM (default: the app's CODE_TOP_K, 5)")
+    p.add_argument("--context-tokens", type=int, default=None, help="context budget in tokens (default: the app's CODE_CONTEXT_TOKENS, 3000)")
     p.add_argument("--configs", nargs="+", default=CONFIG_NAMES, choices=CONFIG_NAMES, help="retrieval configurations to compare")
     p.add_argument("--limit", type=int, default=None, help="only the first N golden questions (quick test)")
     p.add_argument("--types", nargs="+", default=None, help="only these question types (direct, paraphrase, ...)")
@@ -64,6 +68,10 @@ def configure_environment(args) -> None:
         os.environ["CODE_CHUNKER"] = args.code_chunker
     if args.code_header:
         os.environ["CODE_CHUNK_HEADER"] = "true" if args.code_header == "on" else "false"
+    if args.top_k:
+        os.environ["CODE_TOP_K"] = str(args.top_k)
+    if args.context_tokens:
+        os.environ["CODE_CONTEXT_TOKENS"] = str(args.context_tokens)
     if args.identifiers:
         os.environ["CODE_SPLIT_IDENTIFIERS"] = "true" if args.identifiers == "on" else "false"
     os.environ["LANGSMITH_TRACING"] = "true" if args.trace else "false"
@@ -152,7 +160,7 @@ def main(argv=None) -> Path:
         def run_all():
             samples = []
             for i, gold in enumerate(golden_list, 1):
-                samples.append(run_question(config, gold, llm))
+                samples.append(run_question(config, gold, llm, mode=args.prompt))
                 print(f"      {config}: {i}/{len(golden_list)}", end="\r", flush=True)
             print()
             return samples
@@ -183,7 +191,8 @@ def main(argv=None) -> Path:
     print("[4/4] writing the report", flush=True)
     summaries = {c: summarise_config(samples_by_config[c], golden, ragas_by_config.get(c)) for c in args.configs}
     chunking = (f"{settings.code_chunker}, header {'on' if settings.code_chunk_header else 'off'}, "
-                f"identifiers {'split' if settings.code_split_identifiers else 'whole'}")
+                f"identifiers {'split' if settings.code_split_identifiers else 'whole'}, "
+                f"{args.prompt} prompt, top-{settings.code_top_k}, {settings.code_context_tokens} tokens")
     info = {
         "date": datetime.now().strftime("%Y-%m-%d %H:%M"), "questions": len(golden_list),
         "answerable": sum(g["answerable"] for g in golden_list), **corpus_info, "split": args.split, "chunking": chunking,

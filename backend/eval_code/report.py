@@ -14,7 +14,8 @@ def summarise_config(samples: list[dict], golden: dict[str, dict], ragas_scores:
         a = answer_metrics(sample, gold)
         if r:
             retrieval.append(r)
-            seen = retrieval_metrics(sample.get("contexts_used", sample["contexts"]), gold["expected"])
+            used = sample.get("contexts_used", sample["contexts"])
+            seen = retrieval_metrics(used, gold["expected"], k=max(5, len(used)))   # everything that reached the LLM, even above 5
             in_prompt.append(seen["hit"])
         (answerable if gold["answerable"] else out_of_scope).append(a)
 

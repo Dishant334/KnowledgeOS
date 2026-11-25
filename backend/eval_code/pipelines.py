@@ -32,6 +32,7 @@ def retrieve_chunks(config: str, question: str):
     from app.retrieval.model import RetrievalConfig, ScoredChunk
     from app.retrieval.orchestrator import get_search_store, retrieve
 
+    k = settings.code_top_k                                   # chunks handed to the LLM (CODE_TOP_K, default 5)
     user_filter = build_qdrant_filter(uploaded_by=str(EVAL_USER_ID))
     hybrid_store = get_search_store()
 
@@ -40,15 +41,15 @@ def retrieve_chunks(config: str, question: str):
             client=hybrid_store.client, collection_name=hybrid_store.collection_name, retrieval_mode=RetrievalMode.DENSE,
             embedding=hybrid_store.embeddings, vector_name=hybrid_store.vector_name,
         )
-        hits = dense_store.similarity_search_with_score(question, k=K, filter=user_filter)
+        hits = dense_store.similarity_search_with_score(question, k=k, filter=user_filter)
         return [ScoredChunk(document=doc, fused_score=score) for doc, score in hits]
 
     if config == "hybrid":
-        return hybrid_search(hybrid_store, question, k=K, qdrant_filter=user_filter,
+        return hybrid_search(hybrid_store, question, k=k, qdrant_filter=user_filter,
                              split_identifiers=settings.code_split_identifiers)   # the eval corpus is a code chat
 
     if config == "hybrid+rerank":
-        return retrieve(question, user_id=EVAL_USER_ID, retrieval_config=RetrievalConfig(final_top_k=K), mode="code").chunks
+        return retrieve(question, user_id=EVAL_USER_ID, retrieval_config=RetrievalConfig(final_top_k=k, candidate_pool_size=max(30, k)), mode="code").chunks
 
     raise ValueError(f"unknown config {config!r}; use one of {CONFIG_NAMES}")
 
@@ -69,17 +70,19 @@ def describe(chunks) -> list[dict]:
     ]
 
 
-def contexts_in_prompt(chunks) -> list[dict]:
+def contexts_in_prompt(chunks, mode: str = "code") -> list[dict]:
     """
     The chunks that really reached the LLM. The prompt builder keeps only what fits in its token budget (3000 tokens)
     and silently drops the rest. Evaluating "what was retrieved" instead of "what the LLM saw" would flatter the pipeline.
     """
+    from app.augmentation.code_budget import get_code_context_builder
     from app.generation.orchestrator import get_context_builder
 
-    return describe(get_context_builder().build(chunks).used_chunks)
+    builder = get_code_context_builder() if mode == "code" else get_context_builder()
+    return describe(builder.build(chunks).used_chunks)
 
 
-def run_question(config: str, gold: dict, llm) -> dict:
+def run_question(config: str, gold: dict, llm, mode: str = "code") -> dict:
     """One golden question through one configuration. Returns a plain dict (a 'sample')."""
     from langchain_core.callbacks import get_usage_metadata_callback
 
@@ -91,7 +94,7 @@ def run_question(config: str, gold: dict, llm) -> dict:
 
     started = time.perf_counter()
     with get_usage_metadata_callback() as usage:        # collects the tokens the LLM reports
-        result = generate_answer(gold["question"], llm, chunks)
+        result = generate_answer(gold["question"], llm, chunks, mode=mode)   # mode picks the prompt and the context budget
     generation_ms = (time.perf_counter() - started) * 1000
 
     tokens = sum(u.get("total_tokens", 0) for u in usage.usage_metadata.values())
@@ -102,7 +105,7 @@ def run_question(config: str, gold: dict, llm) -> dict:
         "question": gold["question"],
         "reference": gold["reference"],
         "contexts": describe(chunks),                       # everything retrieval returned (top 5)
-        "contexts_used": contexts_in_prompt(chunks),        # the part of it that fit in the prompt
+        "contexts_used": contexts_in_prompt(chunks, mode),        # the part of it that fit in the prompt
         "answer": result.answer,
         "abstained": result.abstained,
         "cited_sources": sorted({c.source_name for c in result.citations if c.source_name}),

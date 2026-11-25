@@ -161,26 +161,38 @@ Adding BM25 to dense search fixes most misses: answers correct go from 0.74 to 0
 
 ### Chat with a codebase (in progress)
 
-A second mode answers questions about source code and cites `path · lines a-b`. It has its own evaluation in [`backend/eval_code/`](backend/eval_code/README.md) (separate from the one above): a frozen 24-file copy of this project, 25 questions (17 dev, 8 sealed test), the same three retrieval configurations, exact metrics plus RAGAS with the local Qwen3 8B judge. Dev split, comparing how code is cut into chunks (Stage 6, tree-sitter):
+A second mode answers questions about source code and cites `path · lines a-b`. It has its own evaluation in [`backend/eval_code/`](backend/eval_code/README.md), separate from the one above: a frozen 24-file copy of this project, 25 questions (17 dev, 8 sealed test), the same three retrieval configurations, exact metrics plus RAGAS with the local Qwen3 8B judge. Each column changes one thing from the previous one:
 
-| Metric (hybrid + rerank) | Splitter (baseline) | AST chunks | AST + file header |
-|---|---|---|---|
-| Hit@5 | 0.86 | 0.79 | 0.79 |
-| MRR | 0.77 | 0.80 | 0.83 |
-| Answers correct | 0.79 | 0.86 | 1.00 |
-| Cites the expected file AND its lines | 1.00 | 1.00 | 0.86 |
-| RAGAS faithfulness | 0.89 | 0.94 | 0.93 |
-| RAGAS context recall | 0.93 | 1.00 | 1.00 |
-| Tokens per question | about 2,190 | about 1,590 | about 1,610 |
+| Metric (dev split, 17 questions) | Splitter (baseline) | AST | AST + header | AST + identifiers |
+|---|---|---|---|---|
+| Hit@5, dense | 0.71 | 0.86 | 0.79 | 0.86 |
+| Hit@5, hybrid | 0.86 | 0.93 | 0.86 | 0.93 |
+| Hit@5, hybrid+rerank | 0.86 | 0.79 | 0.79 | 0.79 |
+| MRR, dense | 0.60 | 0.77 | 0.65 | 0.77 |
+| MRR, hybrid | 0.88 | 0.82 | 0.73 | 0.79 |
+| MRR, hybrid+rerank | 0.77 | 0.80 | 0.83 | 0.80 |
+| Answers correct, dense | 0.71 | 0.79 | 0.86 | 0.79 |
+| Answers correct, hybrid | 0.79 | 0.86 | 0.93 | 0.86 |
+| Answers correct, hybrid+rerank | 0.79 | 0.86 | 1.00 | 0.86 |
+| False refusals, hybrid+rerank | 0.00 | 0.00 | 0.00 | 0.00 |
+| Refuses out-of-scope, hybrid | 0.67 | 1.00 | 1.00 | 0.67 |
+| Refuses out-of-scope, hybrid+rerank | 1.00 | 1.00 | 1.00 | 1.00 |
+| Cites right file AND lines, hybrid+rerank | 1.00 | 1.00 | 0.86 | 1.00 |
+| Citation line precision, hybrid+rerank | 0.96 | 0.90 | 0.82 | 0.90 |
+| RAGAS faithfulness, hybrid+rerank | 0.89 | 0.94 | 0.93 | 0.94 |
+| RAGAS answer relevancy, hybrid+rerank | 0.90 | 0.91 | 0.89 | 0.91 |
+| RAGAS context precision, hybrid+rerank | 0.82 | 0.89 | 0.94 | 0.89 |
+| RAGAS context recall, hybrid+rerank | 0.93 | 1.00 | 1.00 | 1.00 |
+| Tokens per question, hybrid+rerank | 2191 | 1589 | 1609 | 1613 |
+| Generation p50 (s), hybrid+rerank | 9.8 | 6.2 | 6.3 | 6.0 |
 
-Under dense and hybrid search the AST chunker also improves retrieval (dense Hit@5 0.71 to 0.86, hybrid 0.86 to 0.93) and answers correct (up in all three configurations). Under hybrid + rerank, Hit@5 falls by one question (c13, a "global" question that is expected to fail) and citation line precision dips slightly. The `# File: path | symbols` header lifts answers correct further but lowers hybrid MRR (0.88 to 0.73) and line-accurate citations (1.00 to 0.86); its gain comes from three flipped questions and may be noise, so it stays **off** by default. **17 questions are few: one question is about 6 points**, so gaps of one or two questions are noise. The RAGAS judge is a small local model, so compare columns rather than trusting absolute values. The sealed test split (8 questions) has not been run yet. Full tables and the questions that flipped: [`backend/eval_code/results/comparison.md`](backend/eval_code/results/comparison.md).
-
+AST chunking is the one clear win (dense Hit@5 0.71 to 0.86, answers correct up in all three configurations, about 600 fewer tokens per question). Under hybrid + rerank Hit@5 is one question lower (c13, a global question expected to fail). The `# File: path | symbols` header lifts answers correct but costs line-accurate citations (1.00 to 0.86) and hybrid MRR, and its gain comes from three flipped questions, so it stays off. Splitting identifiers (`take_token` into `take token` for keyword search) changed nothing measurable (Hit@5 identical everywhere; the 0.67 in one cell is a single out-of-scope question), so it stays off by default. 17 questions are few: **one question is about 6 points**, so gaps of one or two questions are noise, and the RAGAS judge is a small local model, so compare columns rather than trusting absolute values. Stage 8 (the code prompt, the context budget and the no-cloud-fallback rule) is built but **not measured**: its eval was skipped on purpose. The sealed test split (8 questions) has not been run. Full tables: [`backend/eval_code/results/`](backend/eval_code/results/).
 
 ### Tests
 
 | | Tests | What they cover |
 |---|---|---|
-| **Backend** (pytest) | **974 passing** (95% line coverage was measured at 653 tests) | Mostly integration tests against **real** Postgres, Qdrant and Redis, the real embedding and reranking models, and a real Celery worker end to end. The LLM is faked for determinism, and a smaller set runs against real local Qwen. Includes auth, rate limits, ingestion of every file type, retrieval, citations, memory and prompt injection. |
+| **Backend** (pytest) | **993 passing** (95% line coverage was measured at 653 tests) | Mostly integration tests against **real** Postgres, Qdrant and Redis, the real embedding and reranking models, and a real Celery worker end to end. The LLM is faked for determinism, and a smaller set runs against real local Qwen. Includes auth, rate limits, ingestion of every file type, retrieval, citations, memory and prompt injection. |
 | **Frontend** (Vitest + Testing Library) | **119 passing, under 1 s** | Error mapping, the SSE stream parser (split chunks, cut-off streams, abort), components, upload and conversation hooks (with fake timers), and an integration test of the whole chat screen. The API and Clerk are mocked. |
 
 ## Security

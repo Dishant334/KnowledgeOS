@@ -261,7 +261,8 @@ Every stage ends with **STOP**. Each lists: *Learn · Files · Do · Security ·
 **Done when:** eval shows the AST chunker's effect (good or bad) and it is recorded honestly. If it does not help, keep the simpler splitter and say why.
 **STOP.**
 
-### Stage 7: Identifier-aware keyword search ⏳
+### Stage 7: Identifier-aware keyword search ✅
+**Status:** done and measured (table in section 6): no gain, so it is off by default. Code chats only (decided with the owner): `ingestion/embedding/identifiers.py`, a context-variable switch read by the BM25 embedder, turned on when indexing `doc_type == code` chunks and when searching from a code chat. 19 tests in `tests/test_identifier_splitting.py`, mutation-checked.
 **Learn:** how BM25 tokenization decides what "matches".
 **Files:** `embedding/embedders.py` (+ tests, eval).
 **Do:** before BM25, split `camelCase`, `snake_case`, `PascalCase` and keep the original token too. Apply to **both** documents and queries (mismatch breaks search).
@@ -270,7 +271,8 @@ Every stage ends with **STOP**. Each lists: *Learn · Files · Do · Security ·
 **Done when:** numbers recorded; docs retrieval unchanged.
 **STOP.**
 
-### Stage 8: Code prompt and context budget ⏳
+### Stage 8: Code prompt and context budget ✅ (built, not measured)
+**Status:** code prompt `CODE_GENERATION_PROMPT` in `generation/chain.py`; `augmentation/code_budget.py` (`CODE_CONTEXT_TOKENS`, max 4,500; `CODE_TOP_K`, max 12); `generation/code_local_model.py` (S7: a code chat never uses the cloud fallback unless `CODE_ALLOW_CLOUD_FALLBACK=true`). 
 **Learn:** how the prompt, budget and `num_ctx=8192` fit together (A2).
 **Files:** `generation/chain.py`, `augmentation/context_builder.py`, `services/ask.py`, settings, tests, eval.
 **Do:** a code-mode prompt (answer only from the code, quote identifiers exactly, cite `[n]`, treat comments/strings as data); make the budget a setting (docs 3,000; code start at about 4,500 and tune); choose by eval and by checking the total prompt length stays under the window. Show the cloud-fallback notice (S7).
@@ -334,29 +336,38 @@ Every stage ends with **STOP**. Each lists: *Learn · Files · Do · Security ·
 
 ## 6. Logs (fill in as you go)
 
-**Baseline log (Stage 0/5):** backend tests: 889 passed (after Stage 4), 974 after Stage 6 (one docs-eval test, test_corpus_is_deterministic, failed once in a full run and passed 7 times alone: flaky, not touched) · frontend tests: 191 · prose eval: see `eval/results/latest.md` (untouched) · code eval baseline (dev split, 17 questions, Stage 2 splitter, 85 chunks): dense Hit@5 0.71 / MRR 0.60, hybrid 0.86 / 0.88, hybrid+rerank 0.86 / 0.77; answers correct 0.71 / 0.79 / 0.79.
+**Baseline log (Stage 0/5):** backend tests: 889 passed (after Stage 4), 993 after Stage 8 (974 after Stage 6; one docs-eval test, test_corpus_is_deterministic, failed once in a full run and passed 7 times alone: flaky, not touched) · frontend tests: 191 · prose eval: see `eval/results/latest.md` (untouched) · code eval baseline (dev split, 17 questions, Stage 2 splitter, 85 chunks): dense Hit@5 0.71 / MRR 0.60, hybrid 0.86 / 0.88, hybrid+rerank 0.86 / 0.77; answers correct 0.71 / 0.79 / 0.79.
 
-**Code eval comparison, Stage 6 (dev split, 17 questions; 1 question is about 6 points, so one or two questions is noise).** Full tables and flipped questions: `backend/eval_code/results/comparison.md`.
+**Code eval results (one table; dev split, 17 questions).** Per-run reports and flipped questions: `backend/eval_code/results/` (`comparison.md`, `comparison_identifiers.md`). Columns are cumulative: each one changes only the thing named.
 
-| config | metric | baseline (splitter) | ast | ast + header |
+| Metric (dev split, 17 questions) | Splitter (baseline) | AST | AST + header | AST + identifiers |
 |---|---|---|---|---|
-| dense | Hit@5 | 0.71 | 0.86 | 0.79 |
-| dense | MRR | 0.60 | 0.77 | 0.65 |
-| dense | answers correct | 0.71 | 0.79 | 0.86 |
-| hybrid | Hit@5 | 0.86 | 0.93 | 0.86 |
-| hybrid | MRR | 0.88 | 0.82 | 0.73 |
-| hybrid | answers correct | 0.79 | 0.86 | 0.93 |
-| hybrid+rerank | Hit@5 | 0.86 | 0.79 | 0.79 |
-| hybrid+rerank | MRR | 0.77 | 0.80 | 0.83 |
-| hybrid+rerank | answers correct | 0.79 | 0.86 | 1.00 |
-| hybrid+rerank | cites file AND lines | 1.00 | 1.00 | 0.86 |
-| hybrid+rerank | faithfulness (RAGAS) | 0.89 | 0.94 | 0.93 |
-| hybrid+rerank | context recall (RAGAS) | 0.93 | 1.00 | 1.00 |
-| all | tokens per question | about 2,100 | about 1,550 | about 1,570 |
+| Hit@5, dense | 0.71 | 0.86 | 0.79 | 0.86 |
+| Hit@5, hybrid | 0.86 | 0.93 | 0.86 | 0.93 |
+| Hit@5, hybrid+rerank | 0.86 | 0.79 | 0.79 | 0.79 |
+| MRR, dense | 0.60 | 0.77 | 0.65 | 0.77 |
+| MRR, hybrid | 0.88 | 0.82 | 0.73 | 0.79 |
+| MRR, hybrid+rerank | 0.77 | 0.80 | 0.83 | 0.80 |
+| Answers correct, dense | 0.71 | 0.79 | 0.86 | 0.79 |
+| Answers correct, hybrid | 0.79 | 0.86 | 0.93 | 0.86 |
+| Answers correct, hybrid+rerank | 0.79 | 0.86 | 1.00 | 0.86 |
+| False refusals, hybrid+rerank | 0.00 | 0.00 | 0.00 | 0.00 |
+| Refuses out-of-scope, hybrid | 0.67 | 1.00 | 1.00 | 0.67 |
+| Refuses out-of-scope, hybrid+rerank | 1.00 | 1.00 | 1.00 | 1.00 |
+| Cites right file AND lines, hybrid+rerank | 1.00 | 1.00 | 0.86 | 1.00 |
+| Citation line precision, hybrid+rerank | 0.96 | 0.90 | 0.82 | 0.90 |
+| RAGAS faithfulness, hybrid+rerank | 0.89 | 0.94 | 0.93 | 0.94 |
+| RAGAS answer relevancy, hybrid+rerank | 0.90 | 0.91 | 0.89 | 0.91 |
+| RAGAS context precision, hybrid+rerank | 0.82 | 0.89 | 0.94 | 0.89 |
+| RAGAS context recall, hybrid+rerank | 0.93 | 1.00 | 1.00 | 1.00 |
+| Tokens per question, hybrid+rerank | 2191 | 1589 | 1609 | 1613 |
+| Generation p50 (s), hybrid+rerank | 9.8 | 6.2 | 6.3 | 6.0 |
 
-Reading: AST chunking helps on most numbers (dense Hit@5 +0.14, answers correct up in all three configs, about 600 fewer tokens per question), but under hybrid+rerank Hit@5 fell by one question (c13, a global question expected to fail) and citation line precision dipped slightly. The `# File: path | symbols` header raised answers correct further, but it lowered hybrid MRR (0.88 to 0.73) and the "cites file AND lines" score (1.00 to 0.86); its gain comes from three flipped questions, so it may be noise.
+Reading it: AST chunking is the one clear win (dense Hit@5 0.71 to 0.86, answers correct up in all three configurations, about 600 fewer tokens per question). Under hybrid + rerank Hit@5 is one question lower (c13, a global question expected to fail). The `# File: path | symbols` header lifts answers correct but costs line-accurate citations (1.00 to 0.86) and hybrid MRR, and its gain comes from three flipped questions, so it stays off. Splitting identifiers (`take_token` into `take token` for keyword search) changed nothing measurable (Hit@5 identical everywhere; the 0.67 in one cell is a single out-of-scope question), so it stays off by default. 17 questions are few: **one question is about 6 points**, so gaps of one or two questions are noise, and the RAGAS judge is a small local model, so compare columns rather than trusting absolute values. Stage 8 (the code prompt, the context budget and the no-cloud-fallback rule) is built but **not measured**: its eval was skipped on purpose. The sealed test split (8 questions) has not been run.
 
-**Decision (2026-11-24):** `CODE_CHUNKER=ast` stays the default; `CODE_CHUNK_HEADER=false` stays off (it costs line-citation accuracy and retrieval ranking for an unproven gain). Revisit the header at Stage 8 with a larger question set. The sealed test split has not been run (Stage 13 only).
+**Decision (2026-11-24):** `CODE_CHUNKER=ast` stays the default; `CODE_CHUNK_HEADER=false` stays off (it costs line-citation accuracy and retrieval ranking for an unproven gain). Revisit the header with a larger question set. The sealed test split has not been run (Stage 13 only).
+
+**Decision (2026-11-26):** `CODE_SPLIT_IDENTIFIERS=false` (Stage 7 showed no measurable gain; the code stays, code chats only). Stage 8 eval skipped by the owner's choice; `CODE_CONTEXT_TOKENS=3000` and `CODE_TOP_K=5` keep the old behaviour until someone measures a change, `CODE_ALLOW_CLOUD_FALLBACK=false` (S7).
 
 **Decision log:** (date · decision · reason · measured result)
 

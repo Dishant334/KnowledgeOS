@@ -33,7 +33,7 @@ class Settings(BaseSettings):
      code_chunker: Literal["ast", "splitter"] = "ast"
      code_chunk_header: bool = False
      # Identifier-aware keyword search (code chats only): BM25 also sees the parts of take_token / TokenBucket.
-     code_split_identifiers: bool = True
+     code_split_identifiers: bool = False   # eval (Stage 7): no measurable gain on the dev split, so off; the code stays
      # Code prompt budget (Stage 8). Documents keep 3,000 tokens and 5 chunks. Capped at 4,500 so that context + history +
      # summary + memory + answer still fit Ollama's 8,192-token window.
      code_context_tokens: int = Field(3000, ge=500, le=4500)
