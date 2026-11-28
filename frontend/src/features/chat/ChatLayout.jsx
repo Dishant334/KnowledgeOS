@@ -156,7 +156,7 @@ export default function ChatLayout() {
   // above the box offers "Ask now" and "Cancel".
   const [waiting, setWaiting] = useState(null) // the question text, or null
   const processingNames = uploads.items
-    .filter((i) => i.status === 'uploading' || i.status === 'pending' || i.status === 'processing')
+    .filter((i) => i.status === 'packing' || i.status === 'uploading' || i.status === 'pending' || i.status === 'processing')
     .map((i) => i.name)
   const stillProcessing = processingNames.length > 0
 

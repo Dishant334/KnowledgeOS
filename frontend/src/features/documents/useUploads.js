@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { deleteDocument, getDocument, listDocuments, uploadDocument } from '../../api/documents'
 import { IN_PROGRESS, validateFile } from '../../lib/files'
+import { packFolder } from '../../lib/zipFolder'
 
 const POLL_MS = 2500 // how often a processing document is checked
 
 // The files being added from the question box. Each item:
-//   { key, name, size, status, progress, error, documentId, failureReason, duplicate }
-// status: 'uploading' (bytes going up) -> the document's own status 'pending' | 'processing' | 'ready' | 'failed',
+//   { key, name, size, status, progress, error, documentId, failureReason, duplicate, note }
+// status: 'packing' (a chosen folder is being zipped in the browser, Stage 11) -> 'uploading' (bytes going up) -> the document's own status 'pending' | 'processing' | 'ready' | 'failed',
 //         or 'rejected' (refused before upload) / 'error' (the upload itself failed).
 // Files upload ONE AT A TIME (a queue), so a big batch does not burst the backend's hourly upload limit at once and
 // every chip gets a clear result. While anything is pending/processing it is re-checked every 2.5 s. A finished file
@@ -121,18 +122,38 @@ export function useUploads(getConversationId, mode = 'docs') {
   }, [])
 
   const addFiles = useCallback(
-    (fileList) => {
+    (fileList, { note } = {}) => {
       for (const file of fileList) {
         const key = `${file.name}-${file.size}-${Math.random().toString(36).slice(2)}`
         const problem = validateFile(file, mode)
         setItems((all) => [
           ...all,
-          { key, name: file.name, size: file.size, status: problem ? 'rejected' : 'uploading', progress: 0, error: problem },
+          { key, name: file.name, size: file.size, status: problem ? 'rejected' : 'uploading', progress: 0, error: problem, note },
         ])
         if (!problem) queue.current = queue.current.then(() => upload(key, file))
       }
     },
     [upload, mode],
+  )
+
+  // CODEBASE-FEATURE (Stage 11): a chosen FOLDER is zipped here in the browser (lib/zipFolder.js), then the zip goes through
+  // the same queue as any file. While it is being packed a chip says so; a folder that cannot be packed stays as a red chip.
+  const addFolder = useCallback(
+    async (fileList) => {
+      const files = Array.from(fileList ?? [])
+      if (mode !== 'code' || files.length === 0) return
+      const key = `pack-${Math.random().toString(36).slice(2)}`
+      const root = (files[0].webkitRelativePath || '').split('/')[0] || 'project'
+      setItems((all) => [...all, { key, name: `${root}.zip`, size: 0, status: 'packing', progress: 0 }])
+      try {
+        const { file, summary } = await packFolder(files)
+        remove(key)
+        addFiles([file], { note: summary })
+      } catch (error) {
+        patch(key, { status: 'rejected', error: error.message || 'This folder could not be packed.' })
+      }
+    },
+    [mode, addFiles, patch, remove],
   )
 
   // keep checking documents that are still being processed
@@ -159,7 +180,7 @@ export function useUploads(getConversationId, mode = 'docs') {
     return () => clearInterval(timer)
   }, [waitingIds, patch])
 
-  return { items, addFiles, discard, reset, showExisting }
+  return { items, addFiles, addFolder, discard, reset, showExisting }
 }
 
 function formatWait(seconds) {

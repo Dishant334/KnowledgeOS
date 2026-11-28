@@ -245,3 +245,16 @@ def test_tier_tables_do_not_overlap():
     assert code.isdisjoint(text)
     assert policy.TIER3_NOTEBOOK.isdisjoint(code | text)
     assert policy.TIER4_DATA.isdisjoint(code | text | policy.TIER3_NOTEBOOK)
+
+
+# --- Stage 11: the browser keeps a copy of these rules (frontend/src/lib/codePolicy.js). Both sides are tested against
+# the SAME list of paths and answers, so a change here that is not copied there (or the reverse) fails a test.
+def test_shared_cases_match_the_policy():
+    import json
+    from pathlib import Path
+
+    cases = json.loads((Path(__file__).parent / "policy_cases.json").read_text())
+    assert len(cases) > 50
+    for case in cases:
+        got = classify(case["path"])
+        assert (got.accepted, got.tier, got.skip_reason) == (case["accepted"], case["tier"], case["reason"]), case["path"]

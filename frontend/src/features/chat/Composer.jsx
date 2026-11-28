@@ -11,6 +11,7 @@ import UploadChip from '../documents/UploadChip'
 // `mode` ('docs' | 'code'): decides which files the paperclip offers and the hint in the box (CODEBASE-FEATURE).
 export default function Composer({ value, onChange, onSubmit, uploads, busy = false, onStop, notice = null, mode = 'docs' }) {
   const input = useRef(null)
+  const folderInput = useRef(null)
   const field = useRef(null)
 
   return (
@@ -50,17 +51,44 @@ export default function Composer({ value, onChange, onSubmit, uploads, busy = fa
               e.target.value = ''
             }}
           />
+          {/* CODEBASE-FEATURE (Stage 11): a code chat can also take a whole folder (zipped in the browser, see lib/zipFolder.js) */}
+          {mode === 'code' && (
+            <input
+              ref={folderInput}
+              type="file"
+              webkitdirectory=""
+              hidden
+              data-testid="folder-input"
+              onChange={(e) => {
+                uploads?.addFolder(e.target.files)
+                e.target.value = ''
+              }}
+            />
+          )}
           <button
             type="button"
             onClick={() => input.current.click()}
-            aria-label={mode === 'code' ? 'Add source files' : 'Add documents'}
-            title={mode === 'code' ? 'Add source files' : 'Add documents'}
+            aria-label={mode === 'code' ? 'Add source files or a zip' : 'Add documents'}
+            title={mode === 'code' ? 'Add source files or a zip' : 'Add documents'}
             className="grid size-10 shrink-0 place-items-center rounded-xl text-stone-600 transition hover:bg-stone-100 hover:text-accent-ink focus-visible:outline-2 focus-visible:outline-brand-700 motion-safe:active:scale-95"
           >
             <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M21 11.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l8.9-8.9a3.7 3.7 0 015.2 5.2l-8.9 8.9a1.8 1.8 0 01-2.6-2.6l8.2-8.2" />
             </svg>
           </button>
+          {mode === 'code' && (
+            <button
+              type="button"
+              onClick={() => folderInput.current.click()}
+              aria-label="Choose a project folder"
+              title="Choose a project folder"
+              className="grid size-10 shrink-0 place-items-center rounded-xl text-stone-600 transition hover:bg-stone-100 hover:text-accent-ink focus-visible:outline-2 focus-visible:outline-brand-700 motion-safe:active:scale-95 [@media(pointer:coarse)]:hidden"
+            >
+              <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 7.5A1.5 1.5 0 014.5 6H9l2 2.5h8.5A1.5 1.5 0 0121 10v8a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 18V7.5z" />
+              </svg>
+            </button>
+          )}
           <textarea
             ref={field}
             rows={1}
@@ -101,7 +129,11 @@ export default function Composer({ value, onChange, onSubmit, uploads, busy = fa
           )}
         </form>
       </div>
-      <p className="mt-2 text-center text-xs text-stone-600">Answers come only from your uploaded documents.</p>
+      <p className="mt-2 text-center text-xs text-stone-600">
+        {mode === 'code'
+          ? 'Answers come only from your uploaded code. Add files, a .zip (macOS: right-click, Compress. Windows: Send to, Compressed folder) or choose a folder.'
+          : 'Answers come only from your uploaded documents.'}
+      </p>
     </div>
   )
 }

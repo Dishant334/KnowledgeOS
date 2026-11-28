@@ -40,7 +40,7 @@ describe('validateFile by mode', () => {
     expect(validateFile(file(name), 'code')).toMatch(/Codebase chat/)
   })
 
-  it.each(['photo.png', 'archive.zip', 'no-extension'])('a Codebase chat refuses %s as not supported', (name) => {
+  it.each(['photo.png', 'archive.rar', 'no-extension'])('a Codebase chat refuses %s as not supported', (name) => {
     expect(validateFile(file(name), 'code')).toMatch(/not supported/)
   })
 
@@ -123,5 +123,27 @@ describe('formatDate', () => {
 
   it('a different year adds the year', () => {
     expect(formatDate(serverTime(2025, 10, 3, 12, 0))).toMatch(/2025/)
+  })
+})
+
+// CODEBASE-FEATURE (Stage 11): a project zip
+describe('project zips', () => {
+  it('a Codebase chat accepts a .zip (and offers it in the file picker)', () => {
+    expect(validateFile(file('project.zip', 5_000_000), 'code')).toBeNull()
+    expect(validateFile(file('PROJECT.ZIP', 10), 'code')).toBeNull()
+    expect(acceptAttributeFor('code')).toContain('.zip')
+  })
+
+  it('a Documents chat refuses a .zip and says where it goes', () => {
+    expect(validateFile(file('project.zip'), 'docs')).toMatch(/Codebase chat/)
+    expect(acceptAttributeFor('docs')).not.toContain('.zip')
+  })
+
+  it('the 20 MB limit applies to the zip itself', () => {
+    expect(validateFile(file('big.zip', MAX_FILE_BYTES + 1), 'code')).toBe('This file is larger than 20 MB.')
+  })
+
+  it('shows as ZIP in a chip', () => {
+    expect(fileTypeLabel('project.zip')).toBe('ZIP')
   })
 })

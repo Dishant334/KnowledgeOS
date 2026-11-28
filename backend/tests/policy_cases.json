@@ -1,0 +1,446 @@
+[
+ {
+  "path": ".env",
+  "accepted": false,
+  "tier": null,
+  "reason": "secret_file"
+ },
+ {
+  "path": ".env.example",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": ".env.local",
+  "accepted": false,
+  "tier": null,
+  "reason": "secret_file"
+ },
+ {
+  "path": ".env.sample",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "src/.env",
+  "accepted": false,
+  "tier": null,
+  "reason": "secret_file"
+ },
+ {
+  "path": "id_rsa",
+  "accepted": false,
+  "tier": null,
+  "reason": "secret_file"
+ },
+ {
+  "path": "id_rsa.pub",
+  "accepted": false,
+  "tier": null,
+  "reason": "secret_file"
+ },
+ {
+  "path": "id_ed25519.pub",
+  "accepted": false,
+  "tier": null,
+  "reason": "secret_file"
+ },
+ {
+  "path": "credentials.json",
+  "accepted": false,
+  "tier": null,
+  "reason": "secret_file"
+ },
+ {
+  "path": "my_credentials.py",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "Credentials.txt",
+  "accepted": false,
+  "tier": null,
+  "reason": "secret_file"
+ },
+ {
+  "path": "server.key",
+  "accepted": false,
+  "tier": null,
+  "reason": "secret_file"
+ },
+ {
+  "path": "cert.pfx",
+  "accepted": false,
+  "tier": null,
+  "reason": "secret_file"
+ },
+ {
+  "path": "keys/a.pem",
+  "accepted": false,
+  "tier": null,
+  "reason": "secret_file"
+ },
+ {
+  "path": "node_modules/a/b.js",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_dir"
+ },
+ {
+  "path": "src/build/x.py",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_dir"
+ },
+ {
+  "path": "build.py",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "dist/app.js",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_dir"
+ },
+ {
+  "path": "venv/lib/x.py",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_dir"
+ },
+ {
+  "path": "a/__pycache__/x.py",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_dir"
+ },
+ {
+  "path": "site-packages/x.py",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_dir"
+ },
+ {
+  "path": "__MACOSX/a.py",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_dir"
+ },
+ {
+  "path": ".github/workflows/ci.yml",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "package-lock.json",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_file"
+ },
+ {
+  "path": "Pipfile.lock",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_file"
+ },
+ {
+  "path": "yarn.lock",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_file"
+ },
+ {
+  "path": "a.min.js",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_file"
+ },
+ {
+  "path": "a.min.css",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_file"
+ },
+ {
+  "path": "a.map",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_file"
+ },
+ {
+  "path": ".DS_Store",
+  "accepted": false,
+  "tier": null,
+  "reason": "ignored_file"
+ },
+ {
+  "path": "app.ts",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "App.TSX",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "main.py",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "Main.java",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "util.c",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "util.hpp",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "a.cc",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "x.mjs",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "x.cjs",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "Dockerfile",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "docker/Dockerfile",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "Makefile",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": ".gitignore",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "requirements.txt",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "README.md",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "docs/guide.rst",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "notes.txt",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "tsconfig.json",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "config.yaml",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "setup.cfg",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "q.sql",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "run.sh",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "page.html",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "style.scss",
+  "accepted": true,
+  "tier": "text",
+  "reason": null
+ },
+ {
+  "path": "nb/analysis.ipynb",
+  "accepted": true,
+  "tier": "notebook",
+  "reason": null
+ },
+ {
+  "path": "data.csv",
+  "accepted": true,
+  "tier": "data",
+  "reason": null
+ },
+ {
+  "path": "data/rows.tsv",
+  "accepted": true,
+  "tier": "data",
+  "reason": null
+ },
+ {
+  "path": "logo.png",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsupported_type"
+ },
+ {
+  "path": "a.zip",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsupported_type"
+ },
+ {
+  "path": "App.vue",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsupported_type"
+ },
+ {
+  "path": "video.mp4",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsupported_type"
+ },
+ {
+  "path": "noextension",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsupported_type"
+ },
+ {
+  "path": "trailing.",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsupported_type"
+ },
+ {
+  "path": "../x.py",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsafe_path"
+ },
+ {
+  "path": "a/../../x.py",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsafe_path"
+ },
+ {
+  "path": "/abs.py",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsafe_path"
+ },
+ {
+  "path": "C:\\win\\x.py",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsafe_path"
+ },
+ {
+  "path": "..\\x.py",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsafe_path"
+ },
+ {
+  "path": "a\\b\\c.py",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "a/./b.py",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsafe_path"
+ },
+ {
+  "path": "   ",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsafe_path"
+ },
+ {
+  "path": "dir//x.py",
+  "accepted": true,
+  "tier": "code",
+  "reason": null
+ },
+ {
+  "path": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.py",
+  "accepted": false,
+  "tier": null,
+  "reason": "unsafe_path"
+ }
+]

@@ -9,11 +9,15 @@ export default function UploadChip({ item, onRemove }) {
   if (status === 'ready' || (status === 'deleting' && !item.error)) {
     return (
       <li
-        className={`flex max-w-64 items-center gap-1.5 rounded-lg bg-surface py-1 pl-1.5 pr-1 text-xs ring-1 ring-stone-200 transition-opacity ${status === 'deleting' ? 'opacity-50' : ''}`}
+        className={`flex ${item.note ? 'max-w-80 items-start' : 'max-w-64 items-center'} gap-1.5 rounded-lg bg-surface py-1 pl-1.5 pr-1 text-xs ring-1 ring-stone-200 transition-opacity ${status === 'deleting' ? 'opacity-50' : ''}`}
       >
-        <span className="shrink-0 rounded bg-stone-100 px-1 py-0.5 text-[9px] font-bold text-stone-700">{fileTypeLabel(item.name)}</span>
-        <span className="truncate font-medium text-ink" title={item.name}>
-          {item.name}
+        <span className="mt-0.5 shrink-0 rounded bg-stone-100 px-1 py-0.5 text-[9px] font-bold text-stone-700">{fileTypeLabel(item.name)}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium text-ink" title={item.name}>
+            {item.name}
+          </span>
+          {/* a zip packed from a folder says what it contains (Stage 11) */}
+          {item.note && <span className="block text-[11px] text-stone-600">{item.note}</span>}
         </span>
         <RemoveButton item={item} onRemove={onRemove} />
       </li>
@@ -22,7 +26,8 @@ export default function UploadChip({ item, onRemove }) {
   const bad = status === 'failed' || status === 'error' || status === 'rejected'
 
   let line
-  if (status === 'uploading') line = `Uploading ${Math.round((item.progress ?? 0) * 100)}%`
+  if (status === 'packing') line = 'Packing the folder...'
+  else if (status === 'uploading') line = `Uploading ${Math.round((item.progress ?? 0) * 100)}%`
   else if (status === 'pending') line = 'Waiting to be processed...'
   else if (status === 'processing') line = 'Reading the document...'
   else if (status === 'ready') line = item.duplicate ? 'Already in your library' : 'Ready to ask about'
@@ -44,7 +49,7 @@ export default function UploadChip({ item, onRemove }) {
         <span
           className={`mt-0.5 flex items-center gap-1 ${bad ? 'text-red-700 dark:text-red-400' : status === 'ready' ? 'text-accent-ink' : 'text-stone-600'}`}
         >
-          {(status === 'pending' || status === 'processing') && (
+          {(status === 'packing' || status === 'pending' || status === 'processing') && (
             <svg className="size-3 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
@@ -57,6 +62,7 @@ export default function UploadChip({ item, onRemove }) {
           )}
           <span className="line-clamp-2">{line}</span>
         </span>
+        {item.note && <span className="mt-0.5 block text-stone-600">{item.note}</span>}
       </span>
       <RemoveButton item={item} onRemove={onRemove} />
 

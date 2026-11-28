@@ -4,7 +4,8 @@
 //   'docs' chat: documents only.   'code' chat: source code (policy.py TIER1_CODE) plus Markdown and text (a README).
 export const DOCUMENT_EXTENSIONS = ['.pdf', '.docx', '.pptx', '.xlsx', '.csv', '.txt', '.md', '.markdown', '.html', '.htm']
 export const CODE_EXTENSIONS = ['.py', '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.java', '.c', '.h', '.cpp', '.hpp', '.cc', '.cxx']
-const CODE_CHAT_EXTENSIONS = [...CODE_EXTENSIONS, '.md', '.markdown', '.txt']
+// (Stage 11) a project .zip is accepted in a Codebase chat; the backend unpacks it (see backend zip_loader.py)
+const CODE_CHAT_EXTENSIONS = [...CODE_EXTENSIONS, '.md', '.markdown', '.txt', '.zip']
 
 export function acceptedExtensionsFor(mode = 'docs') {
   return mode === 'code' ? CODE_CHAT_EXTENSIONS : DOCUMENT_EXTENSIONS
@@ -28,11 +29,14 @@ export function validateFile(file, mode = 'docs') {
     if (mode === 'code' && DOCUMENT_EXTENSIONS.includes(ext)) {
       return 'This is a Codebase chat: add source code (or Markdown or text), not documents. Start a Documents chat for those.'
     }
+    if (mode !== 'code' && ext === '.zip') {
+      return 'This file type is not supported here: a project zip goes in a Codebase chat. Start a new chat and choose Codebase.'
+    }
     if (mode !== 'code' && CODE_EXTENSIONS.includes(ext)) {
       return 'Source code goes in a Codebase chat. Start a new chat and choose Codebase.'
     }
     return mode === 'code'
-      ? 'This file type is not supported in a Codebase chat. Use source code (.py, .js, .ts, .java, .c, .cpp), Markdown or text.'
+      ? 'This file type is not supported in a Codebase chat. Use source code (.py, .js, .ts, .java, .c, .cpp), Markdown, text or a project .zip.'
       : 'This file type is not supported. Use PDF, Word, PowerPoint, Excel, CSV, text, Markdown or HTML.'
   }
   if (file.size > MAX_FILE_BYTES) return 'This file is larger than 20 MB.'

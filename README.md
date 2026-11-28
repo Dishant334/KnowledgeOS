@@ -193,7 +193,7 @@ AST chunking is the one clear win (dense Hit@5 0.71 to 0.86, answers correct up 
 | | Tests | What they cover |
 |---|---|---|
 | **Backend** (pytest) | **993 passing** (95% line coverage was measured at 653 tests) | Mostly integration tests against **real** Postgres, Qdrant and Redis, the real embedding and reranking models, and a real Celery worker end to end. The LLM is faked for determinism, and a smaller set runs against real local Qwen. Includes auth, rate limits, ingestion of every file type, retrieval, citations, memory and prompt injection. |
-| **Frontend** (Vitest + Testing Library) | **119 passing, under 1 s** | Error mapping, the SSE stream parser (split chunks, cut-off streams, abort), components, upload and conversation hooks (with fake timers), and an integration test of the whole chat screen. The API and Clerk are mocked. |
+| **Frontend** (Vitest + Testing Library) | **286 passing, under 2 s** | Error mapping, the SSE stream parser (split chunks, cut-off streams, abort), components, upload and conversation hooks (with fake timers), and an integration test of the whole chat screen. The API and Clerk are mocked. |
 
 ## Security
 
