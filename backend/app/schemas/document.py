@@ -12,6 +12,10 @@ FAILURE_REASONS = (
     ("chunking gave no output", "No readable text was found in the file."),
     ("Source file is not valid UTF-8", "This file is not valid UTF-8 text, so it could not be read as code."),  # CODEBASE-FEATURE
     ("Code file is empty", "The file is empty."),  # CODEBASE-FEATURE
+    ("Not a valid zip", "This is not a valid zip file."),  # CODEBASE-FEATURE
+    ("No usable files in the zip", "The zip had no source, text or config files KnowledgeOS can read (build folders, images, binaries and secrets are skipped)."),
+    ("Zip has too many entries", "The zip has too many files. Remove build and dependency folders and try again."),
+    ("Processing took too long", "This project is too big to process in time. Upload a smaller zip."),
     ("Failed after", "A temporary problem stopped processing this file. Please try uploading it again."),
     ("Failed to queue ingestion", "Processing could not be started. Please try uploading the file again."),
 )

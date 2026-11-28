@@ -1,8 +1,10 @@
 import logging
 from contextlib import contextmanager
 
+from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import text
 
+from app.core.config import settings
 from app.db.database import SessionLocal, engine
 from app.db.models.documents import Document
 from app.ingestion.embedding.models import EmbeddingConfig
@@ -43,6 +45,7 @@ _DOC_TYPES = {
     "text/plain": "txt",
     "text/markdown": "md",
     "text/x-code": "code",  # CODEBASE-FEATURE
+    "application/zip": "code",  # CODEBASE-FEATURE: every file of a project zip is searched as code (Qdrant doc_type)
 }
 
 
@@ -111,6 +114,8 @@ def _document_lock(document_id: int):
     # dies mid-task, so an interrupted ingestion is redelivered, not lost.
     acks_late=True,
     reject_on_worker_lost=True,
+    soft_time_limit=settings.ingest_soft_time_limit_seconds,   # CODEBASE-FEATURE (S9)
+    time_limit=settings.ingest_time_limit_seconds,
 )
 def ingest_file_task(self, document_id: int):
     """
@@ -151,6 +156,13 @@ def _ingest(task, document_id: int):
                 document.mime_type,
                 build_chunk_metadata(document),
             )
+        except SoftTimeLimitExceeded:
+            # CODEBASE-FEATURE (S9): too big to finish in time. Retrying would just time out again.
+            db.rollback()
+            delete_document_points(document_id)   # drop the vectors written so far
+            logger.warning("ingestion of document %s exceeded its time limit", document_id)
+            _set_status(db, document, STATUS_FAILED, "Processing took too long")
+            return {"document_id": document_id, "status": STATUS_FAILED, "success": False, "error": "Processing took too long"}
         except Exception as exc:
             # Only transient infrastructure errors reach here (content errors
             # come back as result.success=False). Retry with backoff; give up

@@ -9,6 +9,7 @@ from app.ingestion.loaders.xlsx import XLSXLoader
 from app.ingestion.loaders.pptx import PPTXLoader
 from app.ingestion.loaders.text import TextLoader
 from app.ingestion.loaders.code_loader import CODE_MIME_TYPE, CodeLoader  # CODEBASE-FEATURE
+from app.ingestion.loaders.zip_loader import ZIP_MIME_TYPE, ZipLoader  # CODEBASE-FEATURE
 
 
 SUPPORTED_MIME_TYPES = frozenset({
@@ -21,6 +22,7 @@ SUPPORTED_MIME_TYPES = frozenset({
     "text/plain",
     "text/markdown",
     CODE_MIME_TYPE,  # CODEBASE-FEATURE
+    ZIP_MIME_TYPE,   # CODEBASE-FEATURE
 })
 
 
@@ -52,6 +54,9 @@ def get_loader(mime_type: str) -> BaseLoader:
 
     elif mime_type == CODE_MIME_TYPE:  # CODEBASE-FEATURE
         return CodeLoader()
+
+    elif mime_type == ZIP_MIME_TYPE:  # CODEBASE-FEATURE
+        return ZipLoader()
 
     else:
         raise ValueError(

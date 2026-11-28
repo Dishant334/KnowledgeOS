@@ -8,6 +8,7 @@ from app.ingestion.chunking.strategies import (
     TableChunkingStrategy,
     HTMLSpecificStrategy,
     CodeChunkingStrategy,  # CODEBASE-FEATURE
+    ProjectChunkingStrategy,  # CODEBASE-FEATURE
 )
 
 _MIME_TO_DOCUMENT_TYPE: dict[str, DocumentType] = {
@@ -20,6 +21,7 @@ _MIME_TO_DOCUMENT_TYPE: dict[str, DocumentType] = {
     "text/plain": DocumentType.PROSE,
     "text/markdown": DocumentType.PROSE,
     "text/x-code": DocumentType.CODE,  # CODEBASE-FEATURE
+    "application/zip": DocumentType.PROJECT,  # CODEBASE-FEATURE
 }
 
 _STRATEGY_BUILDERS = {
@@ -28,6 +30,7 @@ _STRATEGY_BUILDERS = {
     DocumentType.TABULAR: TableChunkingStrategy,
     DocumentType.HTML: HTMLSpecificStrategy,
     DocumentType.CODE: CodeChunkingStrategy,  # CODEBASE-FEATURE
+    DocumentType.PROJECT: ProjectChunkingStrategy,  # CODEBASE-FEATURE
 }
 
 

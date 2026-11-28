@@ -1,5 +1,7 @@
 from uuid import UUID
+import io
 import logging
+import zipfile
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.exc import IntegrityError
@@ -11,6 +13,7 @@ from app.core.postgres_storage import PostgresStorage
 from app.ingestion.hashing import compute_document_hash
 from app.ingestion.loaders.factory import SUPPORTED_MIME_TYPES
 from app.ingestion.loaders.code_loader import CODE_MIME_TYPE  # CODEBASE-FEATURE
+from app.ingestion.loaders.zip_loader import ZIP_MIME_TYPE  # CODEBASE-FEATURE
 from app.ingestion.codebase.policy import classify as classify_codebase_file, language_for  # CODEBASE-FEATURE
 from app.db.models.documents_blob import DocumentBlob
 from app.worker.celery_app import celery_app
@@ -58,7 +61,7 @@ _CODE_REFUSALS = {
 
 # CODEBASE-FEATURE (Stage 4, S12): which kinds of file each chat mode accepts. A code chat takes source code plus
 # Markdown and text (a README); everything else is a document and belongs in a documents chat.
-CODE_CHAT_MIME_TYPES = frozenset({CODE_MIME_TYPE, "text/markdown", "text/plain"})
+CODE_CHAT_MIME_TYPES = frozenset({CODE_MIME_TYPE, ZIP_MIME_TYPE, "text/markdown", "text/plain"})   # Stage 9: + a project zip
 
 _DOCS_CHAT_REFUSES_CODE = "This is a documents chat: source code files go in a codebase chat. Start a new chat and choose Codebase."
 _CODE_CHAT_REFUSES_DOCUMENT = (
@@ -71,7 +74,7 @@ def mode_refusal(mode: str, mime_type: str | None) -> str | None:
     """Why a file of this type may not go into a chat of this mode (None = allowed). Enforced by the server."""
     if mode == "code" and mime_type not in CODE_CHAT_MIME_TYPES:
         return _CODE_CHAT_REFUSES_DOCUMENT
-    if mode != "code" and mime_type == CODE_MIME_TYPE:
+    if mode != "code" and mime_type in (CODE_MIME_TYPE, ZIP_MIME_TYPE):
         return _DOCS_CHAT_REFUSES_CODE
     return None
 
@@ -81,6 +84,8 @@ def resolve_mime_type(content_type: str | None, filename: str) -> str | None:
     # (browsers label .ts as video/mp2t and .py as octet-stream or text/plain).
     if language_for(filename):
         return CODE_MIME_TYPE
+    if filename.lower().endswith(".zip"):   # Stage 9: a project zip, whatever the client called it
+        return ZIP_MIME_TYPE
     content_type = (content_type or "").split(";")[0].strip().lower() or None
     if content_type in _GENERIC_MIME_TYPES:
         suffix = filename[filename.rfind("."):].lower() if "." in filename else ""
@@ -159,6 +164,10 @@ async def _save_document(db: Session, user: User, file: UploadFile) -> tuple[Doc
 
     # Read file
     content = await file.read()
+
+    # CODEBASE-FEATURE (Stage 9): a file called .zip must really be a zip (checked before anything is stored)
+    if mime_type == ZIP_MIME_TYPE and not zipfile.is_zipfile(io.BytesIO(content)):
+        raise HTTPException(status_code=400, detail="This is not a valid zip file.")
 
     document_hash = compute_document_hash(content)
     # Dedup is per user: never return another user's document.

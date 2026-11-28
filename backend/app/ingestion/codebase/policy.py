@@ -59,6 +59,7 @@ IGNORED_DIRS: frozenset[str] = frozenset(
         "node_modules", ".git", "venv", ".venv", "env", "dist", "build", "target", "out",
         "__pycache__", ".idea", ".vscode", "vendor",
         ".next", ".nuxt", "coverage", ".pytest_cache", ".mypy_cache", ".gradle", ".tox", "site-packages",
+        "__macosx",  # the resource forks macOS Finder adds to every zip
     }
 )
 # File names (exact, lower-case) and glob patterns that are noise, not source (S10, S21).
@@ -87,6 +88,7 @@ MAX_FILE_BYTES: dict[str, int] = {
 MAX_ZIP_UNCOMPRESSED = 50 * 1024 * 1024  # total bytes after unzipping
 MAX_FILES = 500                          # members read from one zip
 MAX_LINE_LENGTH = 2_000                  # longer lines mean minified/generated code
+MAX_ZIP_ENTRIES = 20_000                 # directory entries + files: refuse a zip with more (memory, S17)
 MAX_PATH_LENGTH = 300
 DATA_SAMPLE_ROWS = 30                    # first N rows of a .csv/.tsv
 DATA_SAMPLE_MAX_BYTES = 20_000           # hard byte cap on that sample
@@ -97,6 +99,23 @@ SKIP_IGNORED_DIR = "ignored_dir"
 SKIP_IGNORED_FILE = "ignored_file"
 SKIP_SECRET_FILE = "secret_file"
 SKIP_UNSUPPORTED = "unsupported_type"
+# Added for zip reading (Stage 9):
+SKIP_SYMLINK = "symlink"
+SKIP_ENCRYPTED = "encrypted"
+SKIP_NESTED_ARCHIVE = "nested_archive"
+SKIP_DUPLICATE = "duplicate_path"
+SKIP_TOO_MANY_FILES = "too_many_files"
+SKIP_SIZE_LIMIT = "zip_size_limit"
+SKIP_TOO_LARGE = "too_large"
+SKIP_NOT_UTF8 = "not_utf8"
+SKIP_EMPTY = "empty"
+SKIP_MINIFIED = "minified_or_generated"
+SKIP_UNREADABLE = "unreadable"
+
+# Archives are never opened inside a zip (zip bombs, S3).
+ARCHIVE_SUFFIXES: frozenset[str] = frozenset(
+    {".zip", ".jar", ".war", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar"}
+)
 
 _DRIVE_LETTER = re.compile(r"^[A-Za-z]:")
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")

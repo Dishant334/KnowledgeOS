@@ -40,6 +40,10 @@ class Settings(BaseSettings):
      code_top_k: int = Field(5, ge=1, le=12)
      # S7: a code chat answers with the primary model only. True lets the cloud fallback see the retrieved source code.
      code_allow_cloud_fallback: bool = False
+     # Ingestion time limits (Stage 9, S9): a big project zip must not occupy a worker forever. At the soft limit the
+     # document is marked failed ("took too long") and its vectors are removed; the hard limit kills the task.
+     ingest_soft_time_limit_seconds: int = Field(900, ge=60)
+     ingest_time_limit_seconds: int = Field(960, ge=90)
 
      # --- Rate limiting (app/core/rate_limit.py; the counters live in Redis) ---
      # Per user. /ask and /ask/stream share one budget. If Redis is down the limiter lets requests through.

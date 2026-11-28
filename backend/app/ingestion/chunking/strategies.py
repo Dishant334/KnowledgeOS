@@ -305,3 +305,65 @@ def add_line_numbers(source: str, chunks: list[Document]) -> list[Document]:
         chunk.metadata["end_line"] = line_of(last)
         previous_start, previous_end = start, start + len(text)
     return chunks
+
+
+class ProjectChunkingStrategy(ChunkingStrategy):
+    """
+    CODEBASE-FEATURE (Stage 9): the chunker for a project zip. The zip loader gives one Document per file with a
+    `tier`; each file is chunked the way its tier needs:
+
+      code      -> CodeChunkingStrategy (tree-sitter, falling back per file)
+      text      -> a token-aware splitter (Markdown headings first for .md)
+      notebook  -> the same splitter, cutting at the "# %% cell" markers first (one cell stays together when it fits)
+      data      -> kept whole: the loader already cut a CSV down to its header and first rows
+
+    Every chunk keeps its file's `file_path`, `language` and line numbers. One file that fails to chunk is logged
+    and left out; it never fails the whole zip.
+    """
+
+    def __init__(self, config: ChunkingConfig):
+        self.config = config
+        self._code = CodeChunkingStrategy(config)
+        self._splitters: dict[str, RecursiveCharacterTextSplitter] = {}
+
+    def _splitter(self, kind: str) -> RecursiveCharacterTextSplitter:
+        if kind not in self._splitters:
+            if kind == "markdown":
+                separators = RecursiveCharacterTextSplitter.get_separators_for_language(Language.MARKDOWN)
+            elif kind == "notebook":
+                separators = ["\n# %%", "\n\n", "\n", " ", ""]
+            else:
+                separators = ["\n\n", "\n", " ", ""]
+            self._splitters[kind] = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+                encoding_name=self.config.encoding_name,
+                chunk_size=self.config.chunk_size,
+                chunk_overlap=self.config.chunk_overlap,
+                separators=separators,
+                strip_whitespace=False,
+            )
+        return self._splitters[kind]
+
+    def split(self, document: Document) -> list[Document]:
+        if not document.page_content or not document.page_content.strip():
+            return []
+        tier = document.metadata.get("tier")
+        if tier == "code":
+            return self._code.split(document)
+        if tier == "data":
+            lines = document.page_content.count("\n") + 1
+            return [Document(page_content=document.page_content,
+                             metadata={**document.metadata, "start_line": 1, "end_line": lines, "chunker": "whole"})]
+        kind = "notebook" if tier == "notebook" else "markdown" if document.metadata.get("language") == "markdown" else "text"
+        chunks = self._splitter(kind).split_documents([document])
+        for chunk in add_line_numbers(document.page_content, chunks):
+            chunk.metadata["chunker"] = "text"
+        return chunks
+
+    def split_batch(self, documents: list[Document]) -> list[Document]:
+        chunks: list[Document] = []
+        for document in documents:
+            try:
+                chunks.extend(self.split(document))
+            except Exception:
+                logger.warning("chunking failed for one file of a project zip; it was left out", exc_info=True)
+        return chunks

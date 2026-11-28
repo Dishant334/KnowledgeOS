@@ -14,6 +14,9 @@ from app.ingestion.chunking.orchestrator import ChunkingOrchestrator
 from app.ingestion.embedding.orchestrator import EmbeddingOrchestrator
 from app.ingestion.model import IngestionResult
 from app.ingestion.loaders.code_loader import CODE_MIME_TYPE  # CODEBASE-FEATURE
+from app.ingestion.loaders.zip_loader import ZIP_MIME_TYPE  # CODEBASE-FEATURE
+
+from celery.exceptions import SoftTimeLimitExceeded  # CODEBASE-FEATURE: a task over its time limit must reach the worker, not be swallowed
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +64,12 @@ def ingest_file(
     try:
         # step 1: load the file using the right loader
         loader = get_loader(mime_type)
-        documents =  loader.load(data, filename, metadata)
+        if mime_type == ZIP_MIME_TYPE:   # CODEBASE-FEATURE: a project zip also reports what it read and what it skipped
+            documents, zip_summary = loader.load_with_summary(data, filename, metadata)
+            warnings.append(zip_summary.describe())
+            logger.info("ingesting a project zip: %s", zip_summary.describe())   # counts and reasons only, never names or content
+        else:
+            documents = loader.load(data, filename, metadata)
 
         if not documents:
             return IngestionResult(
@@ -79,7 +87,7 @@ def ingest_file(
         # CODEBASE-FEATURE: code is NEVER cleaned. The cleaner drops repeated lines (`return None`, `}`),
         # flattens whitespace and flags low-alphanumeric text, which would corrupt source code.
         # The loader already refused empty files, so only the cleaner is skipped.
-        if mime_type == CODE_MIME_TYPE:
+        if mime_type in (CODE_MIME_TYPE, ZIP_MIME_TYPE):
             cleaned_documents = documents
         else:
             cleaned_documents = cleaning_orchestrator.process_batch(documents)
@@ -116,6 +124,9 @@ def ingest_file(
             point_ids=point_ids,
             warnings=warnings,
         )
+
+    except SoftTimeLimitExceeded:
+        raise
 
     except TRANSIENT_EXCEPTIONS:
         logger.warning("transient failure while ingesting %s; will be retried", filename)

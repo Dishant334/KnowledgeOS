@@ -12,6 +12,7 @@ class DocumentType(StrEnum):
     TABULAR = "tabular"
     HTML = "html"
     CODE = "code"  # CODEBASE-FEATURE
+    PROJECT = "project"  # CODEBASE-FEATURE: a zip of many files, each chunked by its own tier
 
 
 @dataclass(frozen=True)
